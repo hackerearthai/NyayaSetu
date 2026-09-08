@@ -491,3 +491,102 @@ main {
     height: 39px;
   }
 }
+
+
+/* NyayaSetu branding: bundled through Vite from src so the logo works regardless of base/public-path configuration. */
+.topbar-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex: 0 0 36px;
+  border-radius: 7px;
+}
+
+.image-brand-mark {
+  width: 42px;
+  height: 42px;
+  padding: 2px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #d6b35a;
+  box-shadow: none;
+}
+
+.image-brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.image-mark {
+  width: 92px;
+  height: 92px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  padding: 5px;
+}
+
+.image-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Keep the full dashboard content aligned to the available viewport. */
+.dashboard-page {
+  width: 100%;
+  max-width: none;
+  padding-right: 30px;
+}
+
+.dashboard-page .summary-grid,
+.dashboard-page .lower-grid,
+.dashboard-page .document-panel,
+.dashboard-page > .panel {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Clean, consistent activity surfaces in dark and light modes. */
+.activity-button {
+  border: 1px solid transparent;
+  border-bottom-color: var(--border-muted);
+  border-radius: 6px;
+  margin: 2px 0;
+  padding: 11px 10px;
+}
+
+.activity-button:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.activity-button svg {
+  flex: 0 0 auto;
+  color: var(--blue);
+}
+
+.light .activity-button svg {
+  color: var(--blue);
+}
+
+.filter-button.active {
+  background: color-mix(in srgb, var(--blue) 14%, var(--surface));
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.light .filter-button.active {
+  background: #ddf4ff;
+  border-color: #0969da;
+  color: #0969da;
+}
+
+@media (max-width: 760px) {
+  .topbar-logo { width: 32px; height: 32px; flex-basis: 32px; }
+  .image-brand-mark { width: 40px; height: 40px; }
+}

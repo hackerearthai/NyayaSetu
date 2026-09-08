@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import nyayaSetuMark from "./nyayasetu-mark.png";
 
 import {
   login,
@@ -10,8 +11,6 @@ import {
   getDocumentHistory,
   verifyDocument,
   uploadDocument,
-  simulateTampering,
-  restoreOriginal,
 } from "./api";
 
 import {
@@ -130,7 +129,7 @@ function Login({ onLogin }) {
     <div className={`auth-shell ${theme}`}>
       <section
         className="auth-visual"
-        aria-label="Sentinel Records evidence integrity pipeline"
+        aria-label="NyayaSetu evidence integrity pipeline"
       >
         <div className="evidence-grid" />
         <div className="evidence-signal signal-one" />
@@ -197,11 +196,11 @@ function Login({ onLogin }) {
         </button>
 
         <div className="auth-card">
-          <div className="auth-mark">
-            <ShieldCheck size={25} />
+          <div className="auth-mark image-mark">
+            <img src={nyayaSetuMark} alt="NyayaSetu" />
           </div>
 
-          <h1>Sign in to Sentinel Records</h1>
+          <h1>Sign in to NyayaSetu</h1>
 
           <p>Secure access to your investigation workspace.</p>
 
@@ -747,7 +746,7 @@ function Dashboard({
     <div className="page-body dashboard-page">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">SENTINEL RECORDS</span>
+          <span className="eyebrow">NYAYASETU</span>
 
           <h1>Dashboard</h1>
 
@@ -1003,8 +1002,6 @@ function DetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [verifyResult, setVerifyResult] = useState(null);
-  const [demoBusy, setDemoBusy] = useState("");
-  const [demoState, setDemoState] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -1042,51 +1039,6 @@ function DetailPage({
       );
     } catch (error) {
       setError(error.message || "Verification failed.");
-    }
-  }
-
-  async function runDemoTamper() {
-    if (demoBusy) return;
-
-    setDemoBusy("tamper");
-    setError("");
-    setDemoState(null);
-
-    try {
-      const result = await simulateTampering(doc.docId);
-      setDemoState(result);
-      notify(
-        result.status === "tampered"
-          ? "Demo tampering applied. Run Verify integrity to detect the hash mismatch."
-          : "Demo tampering did not change the hash."
-      );
-      await load();
-    } catch (error) {
-      setError(error.message || "Demo tampering failed.");
-    } finally {
-      setDemoBusy("");
-    }
-  }
-
-  async function runDemoRestore() {
-    if (demoBusy) return;
-
-    setDemoBusy("restore");
-    setError("");
-
-    try {
-      const result = await restoreOriginal(doc.docId);
-      setDemoState(result);
-      notify(
-        result.status === "restored"
-          ? "Original registered file restored."
-          : "Original file could not be restored."
-      );
-      await load();
-    } catch (error) {
-      setError(error.message || "Restore failed.");
-    } finally {
-      setDemoBusy("");
     }
   }
 
@@ -1146,23 +1098,9 @@ function DetailPage({
             </b>
 
             <small>
-              Registered SHA-256:
-              <br />
-              {verifyResult.onChainHash || "—"}
-              <br /><br />
               Current SHA-256:
               <br />
-              {verifyResult.currentHash || "—"}
-              <br /><br />
-              {verifyResult.status === "verified"
-                ? "HASH MATCH"
-                : "HASH MISMATCH"}
-              {verifyResult.verifiedAt && (
-                <>
-                  <br />
-                  Checked: {fmt(verifyResult.verifiedAt)}
-                </>
-              )}
+              {verifyResult.currentHash}
             </small>
           </span>
         </div>
@@ -1183,43 +1121,6 @@ function DetailPage({
                 <div style={{ marginTop: 15 }}>
                   <StatusBadge status={doc.status} />
                 </div>
-              </section>
-
-              <section className="panel">
-                <PanelHead
-                  title="Tamper Detection Demo"
-                  subtitle="Test whether the registered evidence has been modified since blockchain registration."
-                />
-
-                <div className="upload-actions" style={{ marginTop: 15 }}>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={Boolean(demoBusy)}
-                    onClick={runDemoTamper}
-                  >
-                    {demoBusy === "tamper" ? "Simulating..." : "Simulate Tampering"}
-                  </button>
-
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={Boolean(demoBusy) || !demoState}
-                    onClick={runDemoRestore}
-                  >
-                    {demoBusy === "restore" ? "Restoring..." : "Restore Original"}
-                  </button>
-                </div>
-
-                {demoState && (
-                  <p className="muted" style={{ marginTop: 12 }}>
-                    {demoState.status === "tampered"
-                      ? "Server copy modified. Verify integrity to demonstrate blockchain hash mismatch."
-                      : demoState.status === "restored"
-                      ? "Original registered file restored."
-                      : ""}
-                  </p>
-                )}
               </section>
 
               <section className="panel">
@@ -1450,8 +1351,12 @@ function ChainPage({ docs }) {
 /* RECORDS PAGE                                                               */
 /* -------------------------------------------------------------------------- */
 
-function RecordsPage({ docs, onSelect, onVerify, busy }) {
-  const [filter, setFilter] = useState("all");
+function RecordsPage({ docs, onSelect, onVerify, busy, initialFilter = "all" }) {
+  const [filter, setFilter] = useState(initialFilter);
+
+  useEffect(() => {
+    setFilter(initialFilter);
+  }, [initialFilter]);
 
   const filtered = docs.filter((doc) => {
     if (filter === "verified") {
@@ -1475,13 +1380,13 @@ function RecordsPage({ docs, onSelect, onVerify, busy }) {
         <div>
           <span className="eyebrow">EVIDENCE REGISTRY</span>
           <h1>All records</h1>
-          <p>Documents registered through the Sentinel backend.</p>
+          <p>Documents registered through the NyayaSetu backend.</p>
         </div>
       </div>
 
       <div className="toolbar records-toolbar">
         <button
-          className="secondary-button"
+          className={`secondary-button filter-button ${filter === "all" ? "active" : ""}`}
           type="button"
           onClick={() => setFilter("all")}
         >
@@ -1490,7 +1395,7 @@ function RecordsPage({ docs, onSelect, onVerify, busy }) {
         </button>
 
         <button
-          className="secondary-button"
+          className={`secondary-button filter-button ${filter === "verified" ? "active" : ""}`}
           type="button"
           onClick={() => setFilter("verified")}
         >
@@ -1499,7 +1404,7 @@ function RecordsPage({ docs, onSelect, onVerify, busy }) {
         </button>
 
         <button
-          className="secondary-button"
+          className={`secondary-button filter-button ${filter === "review" ? "active" : ""}`}
           type="button"
           onClick={() => setFilter("review")}
         >
@@ -1508,7 +1413,7 @@ function RecordsPage({ docs, onSelect, onVerify, busy }) {
         </button>
 
         <button
-          className="secondary-button"
+          className={`secondary-button filter-button ${filter === "tampered" ? "active" : ""}`}
           type="button"
           onClick={() => setFilter("tampered")}
         >
@@ -1552,12 +1457,12 @@ function Sidebar({
     <div className={`sidebar-wrap ${mobile ? "open" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">
-            <ShieldCheck size={21} />
+          <div className="brand-mark image-brand-mark">
+            <img src={nyayaSetuMark} alt="NyayaSetu" />
           </div>
 
           <div>
-            <strong>Sentinel Records</strong>
+            <strong>NyayaSetu</strong>
             <small>Evidence integrity</small>
           </div>
         </div>
@@ -1696,9 +1601,9 @@ function Topbar({
       </button>
 
       <div className="topbar-brand">
-        <ShieldCheck size={22} />
+        <img className="topbar-logo" src={nyayaSetuMark} alt="NyayaSetu" />
 
-        <strong>Sentinel Records</strong>
+        <strong>NyayaSetu</strong>
 
         <span>/</span>
 
@@ -1827,6 +1732,7 @@ function App({ onLogout }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [mobile, setMobile] = useState(false);
+  const [recordsFilter, setRecordsFilter] = useState("all");
 
   const user = useMemo(() => {
     try {
@@ -1903,6 +1809,10 @@ function App({ onLogout }) {
     setPage(nextPage);
     setMobile(false);
 
+    if (nextPage === "records") {
+      setRecordsFilter("all");
+    }
+
     if (nextPage !== "detail") {
       setSelectedId(null);
     }
@@ -1964,17 +1874,9 @@ function App({ onLogout }) {
   }
 
   function filterRecords(value) {
-    if (value === "tampered") {
-      setPage("records");
-      return;
-    }
-
-    if (value === "verified") {
-      setPage("records");
-      return;
-    }
-
+    setRecordsFilter(value);
     setPage("records");
+    setMobile(false);
   }
 
   const selected = docs.find((doc) => doc.docId === selectedId);
@@ -2049,6 +1951,7 @@ function App({ onLogout }) {
                   onSelect={selectDocument}
                   onVerify={verify}
                   busy={busy}
+                  initialFilter={recordsFilter}
                 />
               )}
 
@@ -2127,7 +2030,7 @@ function App({ onLogout }) {
                     <div>
                       <span className="eyebrow">ACCOUNT</span>
                       <h1>Settings</h1>
-                      <p>Current Sentinel Records session.</p>
+                      <p>Current NyayaSetu session.</p>
                     </div>
                   </div>
 
@@ -2161,7 +2064,7 @@ function App({ onLogout }) {
                     <div>
                       <span className="eyebrow">ACCOUNT</span>
                       <h1>Profile</h1>
-                      <p>Your authenticated Sentinel Records identity.</p>
+                      <p>Your authenticated NyayaSetu identity.</p>
                     </div>
                   </div>
 
