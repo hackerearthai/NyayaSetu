@@ -9,6 +9,7 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const chain = require('../blockchain/contract');
 const { analyzeDocument } = require('../services/aiService');
+const { findSimilarDocuments } = require('../services/documentSimilarity');
 
 const router = express.Router();
 
@@ -73,11 +74,66 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     // 1. Compute SHA-256.
     const docHash = await hashFile(filePath);
 
-    // 2. AI is intentionally optional while the AI teammate is still building.
-    // aiService.js already returns review_recommended if the AI service is offline.
+    // 2. Pre-registration screening. AI remains a risk flag only; it never
+    // silently changes the blockchain workflow.
     const { aiRiskFlag } = await analyzeDocument(filePath, filename);
 
-    // 3. Register the integrity record on-chain.
+    // 3. Detect an attempted re-upload of an already registered document.
+    // Exact SHA-256 catches byte-for-byte duplicates. Visual/text similarity
+    // catches modified copies whose SHA-256 is different. We block the new
+    // registration and return the matching existing record for human review.
+    const exactMatch = await db.query(
+      'SELECT "docId", filename, "docHash", timestamp FROM documents WHERE "docHash" = $1 LIMIT 1',
+      [docHash],
+    );
+
+    if (exactMatch.rows.length) {
+      removeFileQuietly(filePath);
+      const match = exactMatch.rows[0];
+      return res.status(409).json({
+        error: 'Duplicate document detected',
+        code: 'DUPLICATE_DOCUMENT',
+        message: 'This file is already registered in Sentinel.',
+        match: {
+          docId: match.docId,
+          filename: match.filename,
+          similarity: 1,
+          matchType: 'exact_hash',
+          existingHash: match.docHash,
+          newHash: docHash,
+          timestamp: match.timestamp,
+        },
+      });
+    }
+
+    const existingDocs = await db.query(
+      'SELECT "docId", filename, filepath, "docHash", timestamp FROM documents',
+    );
+
+    const similar = await findSimilarDocuments(filePath, existingDocs.rows, 0.93);
+
+    if (similar.length) {
+      removeFileQuietly(filePath);
+      const match = similar[0];
+      return res.status(409).json({
+        error: 'Possible modified duplicate detected',
+        code: 'POSSIBLE_MODIFIED_DUPLICATE',
+        message: 'This upload is highly similar to an already registered document but has a different SHA-256 hash. Registration was blocked for review.',
+        match: {
+          docId: match.docId,
+          filename: match.filename,
+          similarity: match.score,
+          matchType: match.matchType,
+          visualSimilarity: match.visualSimilarity,
+          textSimilarity: match.textSimilarity,
+          existingHash: match.docHash,
+          newHash: docHash,
+          timestamp: match.timestamp,
+        },
+      });
+    }
+
+    // 4. Register the integrity record on-chain.
     // Do not silently return success if blockchain registration failed.
     const chainResult = await chain.registerDocument(docId, docHash, uploaderId);
     if (!chainResult) {
@@ -88,7 +144,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    // 4. Save metadata only after successful blockchain registration.
+    // 5. Save metadata only after successful blockchain registration.
     await db.query(
       `INSERT INTO documents ("docId", filename, filepath, "docHash", "uploaderId", timestamp, "aiRiskFlag", "currentVersion")
        VALUES ($1, $2, $3, $4, $5, NOW(), $6, 1)`,
@@ -180,9 +236,6 @@ router.get('/:docId', async (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // Only supported on-chain access actions are view/download/share.
-    await chain.logAccess(docId, req.user.userId, 'view');
-
     const doc = result.rows[0];
 
     const versions = await db.query(
@@ -190,12 +243,26 @@ router.get('/:docId', async (req, res) => {
       [docId],
     );
 
-    const onChainHistory = await chain.getDocumentHistory(docId);
+    // Detail loading must not fail just because an access-log/history read
+    // temporarily fails. The document metadata and version history are still
+    // useful, while Verify Integrity performs the actual cryptographic check.
+    let accessLog = [];
+    let blockchainAvailable = true;
+
+    try {
+      // Only supported on-chain access actions are view/download/share.
+      await chain.logAccess(docId, req.user.userId, 'view');
+      accessLog = await chain.getDocumentHistory(docId) || [];
+    } catch (chainError) {
+      blockchainAvailable = false;
+      console.warn(`[DETAIL] Blockchain history unavailable for ${docId}:`, chainError.message);
+    }
 
     return res.json({
       ...doc,
       versions: versions.rows,
-      accessLog: onChainHistory || [],
+      accessLog,
+      blockchainAvailable,
     });
   } catch (err) {
     console.error('[DETAIL] Error:', err);
@@ -246,15 +313,113 @@ router.post('/:docId/verify', async (req, res) => {
       status,
       onChainHash: chainResult.onChainHash,
       currentHash,
+      verifiedAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error('[VERIFY] Error:', err);
-    return res.status(500).json({ error: 'Verification failed' });
+
+    const message = err?.message || 'Verification failed';
+
+    if (/Document does not exist/i.test(message)) {
+      return res.status(409).json({
+        error: 'Blockchain record not found',
+        code: 'BLOCKCHAIN_RECORD_NOT_FOUND',
+        message: 'This database record is not present on the currently connected blockchain registry. The local Hardhat chain may have been reset or the contract may have been redeployed.',
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Verification failed',
+      message,
+    });
   }
 });
 
 // ═════════════════════════════════════════════════════════════
-// 5. POST /api/documents/:docId/version
+// 5. POST /api/documents/:docId/demo-tamper
+// ═════════════════════════════════════════════════════════════
+router.post('/:docId/demo-tamper', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const result = await db.query(
+      'SELECT filepath, "docHash" FROM documents WHERE "docId" = $1',
+      [docId],
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const { filepath, docHash } = result.rows[0];
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+
+    const backupPath = `${filepath}.sentinel-original`;
+    if (!fs.existsSync(backupPath)) {
+      fs.copyFileSync(filepath, backupPath);
+    }
+
+    fs.appendFileSync(filepath, Buffer.from('\nSENTINEL_DEMO_TAMPERED\n', 'utf8'));
+    const currentHash = await hashFile(filepath);
+
+    return res.json({
+      docId,
+      status: currentHash === docHash ? 'verified' : 'tampered',
+      originalHash: docHash,
+      currentHash,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[DEMO-TAMPER] Error:', err);
+    return res.status(500).json({ error: 'Demo tampering failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// 6. POST /api/documents/:docId/demo-restore
+// ═════════════════════════════════════════════════════════════
+router.post('/:docId/demo-restore', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const result = await db.query(
+      'SELECT filepath, "docHash" FROM documents WHERE "docId" = $1',
+      [docId],
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const { filepath, docHash } = result.rows[0];
+    const backupPath = `${filepath}.sentinel-original`;
+
+    if (!fs.existsSync(backupPath)) {
+      return res.status(409).json({
+        error: 'No demo backup exists',
+        message: 'Run Simulate Tampering first.',
+      });
+    }
+
+    fs.copyFileSync(backupPath, filepath);
+    removeFileQuietly(backupPath);
+    const currentHash = await hashFile(filepath);
+
+    return res.json({
+      docId,
+      status: currentHash === docHash ? 'restored' : 'restore_failed',
+      onChainHash: docHash,
+      currentHash,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[DEMO-RESTORE] Error:', err);
+    return res.status(500).json({ error: 'Restore failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// 7. POST /api/documents/:docId/version
 // ═════════════════════════════════════════════════════════════
 router.post('/:docId/version', upload.single('file'), async (req, res) => {
   try {

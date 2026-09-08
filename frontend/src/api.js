@@ -19,7 +19,13 @@ async function request(path, options = {}) {
     localStorage.removeItem("sentinel-user");
   }
   if (!response.ok) {
-    throw new Error(data.error || data.message || `Request failed (${response.status})`);
+    const error = new Error(
+      data.message || data.error || `Request failed (${response.status})`
+    );
+    error.status = response.status;
+    error.code = data.code;
+    error.details = data.match || data.details || null;
+    throw error;
   }
   return data;
 }
@@ -55,3 +61,10 @@ export function logout() {
   localStorage.removeItem("sentinel-token");
   localStorage.removeItem("sentinel-user");
 }
+
+
+export const simulateTampering = id =>
+  request(`/documents/${encodeURIComponent(id)}/demo-tamper`, { method: "POST" });
+
+export const restoreOriginal = id =>
+  request(`/documents/${encodeURIComponent(id)}/demo-restore`, { method: "POST" });

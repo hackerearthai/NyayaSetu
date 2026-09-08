@@ -10,6 +10,8 @@ import {
   getDocumentHistory,
   verifyDocument,
   uploadDocument,
+  simulateTampering,
+  restoreOriginal,
 } from "./api";
 
 import {
@@ -1001,6 +1003,8 @@ function DetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [verifyResult, setVerifyResult] = useState(null);
+  const [demoBusy, setDemoBusy] = useState("");
+  const [demoState, setDemoState] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -1038,6 +1042,51 @@ function DetailPage({
       );
     } catch (error) {
       setError(error.message || "Verification failed.");
+    }
+  }
+
+  async function runDemoTamper() {
+    if (demoBusy) return;
+
+    setDemoBusy("tamper");
+    setError("");
+    setDemoState(null);
+
+    try {
+      const result = await simulateTampering(doc.docId);
+      setDemoState(result);
+      notify(
+        result.status === "tampered"
+          ? "Demo tampering applied. Run Verify integrity to detect the hash mismatch."
+          : "Demo tampering did not change the hash."
+      );
+      await load();
+    } catch (error) {
+      setError(error.message || "Demo tampering failed.");
+    } finally {
+      setDemoBusy("");
+    }
+  }
+
+  async function runDemoRestore() {
+    if (demoBusy) return;
+
+    setDemoBusy("restore");
+    setError("");
+
+    try {
+      const result = await restoreOriginal(doc.docId);
+      setDemoState(result);
+      notify(
+        result.status === "restored"
+          ? "Original registered file restored."
+          : "Original file could not be restored."
+      );
+      await load();
+    } catch (error) {
+      setError(error.message || "Restore failed.");
+    } finally {
+      setDemoBusy("");
     }
   }
 
@@ -1097,9 +1146,23 @@ function DetailPage({
             </b>
 
             <small>
+              Registered SHA-256:
+              <br />
+              {verifyResult.onChainHash || "—"}
+              <br /><br />
               Current SHA-256:
               <br />
-              {verifyResult.currentHash}
+              {verifyResult.currentHash || "—"}
+              <br /><br />
+              {verifyResult.status === "verified"
+                ? "HASH MATCH"
+                : "HASH MISMATCH"}
+              {verifyResult.verifiedAt && (
+                <>
+                  <br />
+                  Checked: {fmt(verifyResult.verifiedAt)}
+                </>
+              )}
             </small>
           </span>
         </div>
@@ -1120,6 +1183,43 @@ function DetailPage({
                 <div style={{ marginTop: 15 }}>
                   <StatusBadge status={doc.status} />
                 </div>
+              </section>
+
+              <section className="panel">
+                <PanelHead
+                  title="Tamper Detection Demo"
+                  subtitle="Test whether the registered evidence has been modified since blockchain registration."
+                />
+
+                <div className="upload-actions" style={{ marginTop: 15 }}>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={Boolean(demoBusy)}
+                    onClick={runDemoTamper}
+                  >
+                    {demoBusy === "tamper" ? "Simulating..." : "Simulate Tampering"}
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={Boolean(demoBusy) || !demoState}
+                    onClick={runDemoRestore}
+                  >
+                    {demoBusy === "restore" ? "Restoring..." : "Restore Original"}
+                  </button>
+                </div>
+
+                {demoState && (
+                  <p className="muted" style={{ marginTop: 12 }}>
+                    {demoState.status === "tampered"
+                      ? "Server copy modified. Verify integrity to demonstrate blockchain hash mismatch."
+                      : demoState.status === "restored"
+                      ? "Original registered file restored."
+                      : ""}
+                  </p>
+                )}
               </section>
 
               <section className="panel">
