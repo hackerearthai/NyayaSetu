@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import nyayaSetuMark from "./nyayasetu-mark.png";
+import totalDocumentsLogo from "./metric-logos/total-documents.png";
+import verifiedRecordsLogo from "./metric-logos/verified-records.png";
+import aiReviewLogo from "./metric-logos/ai-review.png";
+import integrityIssuesLogo from "./metric-logos/integrity-issues.png";
 
 import {
   login,
@@ -321,14 +325,18 @@ function StatusBadge({ status }) {
   );
 }
 
-function Metric({ label, value, icon: Icon, tone = "", onClick }) {
+function Metric({ label, value, icon: Icon, logo, tone = "", onClick }) {
   return (
     <button
       className={`metric metric-button ${tone}`}
       onClick={onClick}
       type="button"
     >
-      <Icon size={18} />
+      {logo ? (
+        <img className="metric-logo" src={logo} alt="" aria-hidden="true" />
+      ) : (
+        <Icon size={18} />
+      )}
 
       <span>
         <small>{label}</small>
@@ -750,21 +758,21 @@ function Dashboard({
         <Metric
           label="Total documents"
           value={docs.length}
-          icon={FileStack}
+          logo={totalDocumentsLogo}
           onClick={() => filterRecords("all")}
         />
 
         <Metric
           label="Verified records"
           value={verifiedCount}
-          icon={BadgeCheck}
+          logo={verifiedRecordsLogo}
           onClick={() => filterRecords("verified")}
         />
 
         <Metric
           label="AI review recommended"
           value={reviewCount}
-          icon={ScanSearch}
+          logo={aiReviewLogo}
           tone="amber"
           onClick={() => navigate("review")}
         />
@@ -772,7 +780,7 @@ function Dashboard({
         <Metric
           label="Integrity issues"
           value={tamperedCount}
-          icon={ShieldAlert}
+          logo={integrityIssuesLogo}
           tone={tamperedCount > 0 ? "red" : ""}
           onClick={() => filterRecords("tampered")}
         />
@@ -1426,14 +1434,9 @@ function Sidebar({
         </div>
 
         <div className="workspace-switcher">
-          <span className="workspace-icon">SR</span>
-
           <span>
-            <small>WORKSPACE</small>
-            <b>Evidence Registry</b>
+            <b>SHA-256 Integrity</b>
           </span>
-
-          <ChevronDown size={14} />
         </div>
 
         <nav>
@@ -1559,6 +1562,15 @@ function Topbar({
       >
         <Menu size={20} />
       </button>
+
+      <div className="header-trust" aria-label="Registry status">
+        <LockKeyhole size={13} />
+        <span>Secure registry</span>
+        <i />
+        <span>SHA-256 integrity</span>
+        <i />
+        <span>Audit ready</span>
+      </div>
 
       <form
         className="global-search"
@@ -2016,7 +2028,7 @@ function App({ onLogout }) {
               )}
 
               {page === "profile" && (
-                <div className="page-body narrow">
+                <div className="page-body narrow profile-page">
                   <div className="page-heading">
                     <div>
                       <span className="eyebrow">ACCOUNT</span>
@@ -2047,7 +2059,7 @@ function App({ onLogout }) {
                           style={{
                             margin: "4px 0 0",
                             color: "var(--muted)",
-                            fontSize: 11,
+                            fontSize: 13,
                           }}
                         >
                           {user?.role || "investigator"}

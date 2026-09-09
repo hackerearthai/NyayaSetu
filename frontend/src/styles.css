@@ -810,3 +810,59 @@ td { font-size: 12px; }
   .profile-id-row { align-items:flex-start; flex-direction:column; }
   .copy-id-button { width:100%; }
 }
+
+/* -------------------------------------------------------------------------- */
+/* REQUESTED UI-ONLY CHANGES: DASHBOARD ICONS + HEADER + PROFILE              */
+/* -------------------------------------------------------------------------- */
+.metric-logo {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  object-fit: contain;
+  display: block;
+  border-radius: 50%;
+}
+
+.metric-button {
+  align-items: center;
+}
+
+.header-trust {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: .15px;
+  margin-right: auto;
+}
+
+.header-trust svg { color: var(--green); flex: 0 0 auto; }
+.header-trust i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border);
+  flex: 0 0 auto;
+}
+
+.app-shell.light .header-trust { color: #57606a; }
+.app-shell.light .header-trust i { background: #a8b0b8; }
+
+.profile-page .info-row span,
+.profile-page .info-row b {
+  font-size: 13px;
+}
+
+.profile-page .profile-id-row span {
+  font-size: 13px;
+}
+
+.profile-page .profile-id-row code {
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .header-trust { display: none; }
+}
