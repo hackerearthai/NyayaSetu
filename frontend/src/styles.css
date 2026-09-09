@@ -590,3 +590,223 @@ main {
   .topbar-logo { width: 32px; height: 32px; flex-basis: 32px; }
   .image-brand-mark { width: 40px; height: 40px; }
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* NYAYASETU TYPOGRAPHY REFRESH                                                */
+/* Modern, readable Inter-first typography across the entire application.     */
+/* -------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  font-family: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
+
+html, body, #root, button, input, textarea, select {
+  font-family: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.topbar-brand strong { font-size: 15px; }
+.topbar-brand span, .topbar-brand b { font-size: 13px; }
+.global-search input, .table-search input { font-size: 13px; }
+.global-search kbd { font-size: 11px; }
+.avatar { font-size: 10px; }
+
+.brand strong { font-size: 17px; }
+.brand small { font-size: 11px; }
+.workspace-switcher small { font-size: 10px; }
+.workspace-switcher b { font-size: 12px; }
+.nav-label { font-size: 10px; }
+.nav-item { font-size: 13px; }
+.nav-count { font-size: 11px; }
+
+.page-heading h1 { font-size: 29px; line-height: 1.2; letter-spacing: -0.025em; }
+.page-heading p { font-size: 13px; line-height: 1.55; }
+.eyebrow { font-size: 11px; letter-spacing: 1.4px; }
+
+.primary-button, .secondary-button, .quick-actions button, .text-button, .back-link {
+  font-size: 13px;
+}
+
+.panel-head h2 { font-size: 16px; line-height: 1.35; }
+.panel-head p { font-size: 12px; line-height: 1.45; }
+.metric small { font-size: 12px; }
+.metric strong { font-size: 25px; }
+.metric em { font-size: 11px; }
+
+.legend { font-size: 12px; }
+.activity-row b { font-size: 12px; line-height: 1.4; }
+.activity-row small, .activity-row time { font-size: 11px; line-height: 1.4; }
+
+th { font-size: 10px; }
+td { font-size: 12px; }
+.file-cell small { font-size: 10px; }
+.status-badge { font-size: 10px; }
+.empty-state { font-size: 13px; }
+
+.toolbar select, .table-search input { font-size: 13px; }
+
+.system-status-row { font-size: 13px; }
+.detail-top { font-size: 13px; }
+.hash-value { font-size: 12px; line-height: 1.55; }
+.version-row, .activity-row { font-size: 12px; }
+
+.auth-card { font-size: 14px; }
+.auth-card input { font-size: 14px; }
+.auth-submit { font-size: 14px; }
+.auth-security { font-size: 12px; line-height: 1.5; }
+
+/* Keep compact timestamps readable without allowing them to dominate the UI. */
+.timestamp-cell { font-size: 11px; }
+
+@media (max-width: 760px) {
+  .page-heading h1 { font-size: 25px; }
+  .nav-item { font-size: 14px; }
+  .activity-button time { font-size: 10px; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* NYAYASETU LIGHT-FIRST UI + PROFILE POLISH                                 */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  font-family: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+
+.app-shell.light {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface2: #f8fafc;
+  --surface-elevated: #ffffff;
+  --surface-hover: #f1f5f9;
+  --border: #d7dee7;
+  --border-muted: #e5eaf0;
+  --muted: #64748b;
+  --text-primary: #172033;
+  --text-secondary: #526174;
+  --text-muted: #7b8797;
+  --blue: #1769aa;
+  --accent: #1769aa;
+  --green: #16834b;
+  --success: #16834b;
+  --amber: #a66a00;
+  --warning: #a66a00;
+  --red: #c83b45;
+  --danger: #c83b45;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.app-shell.light .topbar {
+  background: rgba(255,255,255,.96);
+  border-bottom-color: var(--border);
+}
+.app-shell.light .icon-button { color: var(--text-secondary); }
+.app-shell.light .icon-button:hover { background: var(--surface-hover); border-color: var(--border); color: var(--text-primary); }
+.app-shell.light .global-search { background: #f8fafc; border-color: var(--border); }
+.app-shell.light .global-search input { color: var(--text-primary); }
+.app-shell.light .sidebar,
+.app-shell.light .right-sidebar { background: #f8fafc; border-color: var(--border); }
+.app-shell.light .brand strong,
+.app-shell.light .workspace-switcher b,
+.app-shell.light .user-card b,
+.app-shell.light .page-heading h1,
+.app-shell.light .panel-head h2,
+.app-shell.light .metric strong,
+.app-shell.light .file-cell b,
+.app-shell.light .activity-row b,
+.app-shell.light .detail-top h1 { color: var(--text-primary); }
+.app-shell.light .brand small,
+.app-shell.light .workspace-switcher small,
+.app-shell.light .nav-label,
+.app-shell.light .secure-note small,
+.app-shell.light .user-card small { color: var(--text-muted); }
+.app-shell.light .workspace-switcher,
+.app-shell.light .panel,
+.app-shell.light .metric,
+.app-shell.light .dropzone,
+.app-shell.light .verification-result,
+.app-shell.light .command-panel,
+.app-shell.light .monitor-card { background: var(--surface); border-color: var(--border); }
+.app-shell.light .workspace-switcher { background: #f1f5f9; }
+.app-shell.light .nav-item { color: var(--text-secondary); }
+.app-shell.light .nav-item:hover { background: #eaf0f6; color: var(--text-primary); }
+.app-shell.light .nav-item.active { background: #e5f1fb; color: var(--blue); }
+.app-shell.light .secondary-button,
+.app-shell.light .quick-actions button,
+.app-shell.light .table-search { background: #ffffff; border-color: var(--border); color: var(--text-primary); }
+.app-shell.light .secondary-button:hover,
+.app-shell.light .quick-actions button:hover { background: #f1f5f9; }
+.app-shell.light .primary-button { background: #1769aa; border-color: #1769aa; }
+.app-shell.light th,
+.app-shell.light td,
+.app-shell.light .info-row,
+.app-shell.light .chain-event,
+.app-shell.light .version-row { border-color: var(--border-muted); }
+.app-shell.light td,
+.app-shell.light .file-cell small,
+.app-shell.light .activity-row small,
+.app-shell.light .activity-row time,
+.app-shell.light .panel-head p,
+.app-shell.light .page-heading p,
+.app-shell.light .info-row span { color: var(--text-secondary); }
+.app-shell.light tbody tr:hover { background: #f8fafc; }
+.app-shell.light .activity-button { border-bottom-color: var(--border-muted); }
+.app-shell.light .activity-button:hover { background: #f8fafc; border-color: var(--border); }
+.app-shell.light .activity-button svg { color: var(--blue); }
+.app-shell.light .status-badge { border-width: 1px; }
+
+/* One factual health indicator instead of decorative/fake activity bars. */
+.registry-health-panel .panel-head { align-items: flex-start; }
+.health-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.health-state.good { color: var(--green); background: color-mix(in srgb, var(--green) 9%, var(--surface)); border-color: color-mix(in srgb, var(--green) 30%, var(--border)); }
+.health-state.warn { color: var(--amber); background: color-mix(in srgb, var(--amber) 9%, var(--surface)); border-color: color-mix(in srgb, var(--amber) 30%, var(--border)); }
+.health-state.bad { color: var(--red); background: color-mix(in srgb, var(--red) 9%, var(--surface)); border-color: color-mix(in srgb, var(--red) 30%, var(--border)); }
+.health-summary { display:flex; align-items:baseline; gap:9px; margin:22px 0 10px; }
+.health-summary strong { font-size: 30px; line-height: 1; letter-spacing: -.04em; color: var(--text-primary); }
+.health-summary span { font-size: 12px; color: var(--text-secondary); }
+.health-progress { height: 9px; width: 100%; overflow: hidden; border-radius: 999px; background: #e8edf3; }
+.health-progress span { display:block; height:100%; min-width:0; border-radius:inherit; background: var(--green); transition: width .3s ease; }
+.health-values { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:16px; }
+.health-values span { font-size:11px; color:var(--text-secondary); }
+.health-values b { display:block; margin-bottom:3px; font-size:15px; color:var(--text-primary); }
+
+/* Profile editing / complete ID. */
+.profile-edit-row { padding: 4px 0 16px; border-bottom: 1px solid var(--border-muted); }
+.profile-edit-row > label { display:block; margin-bottom:8px; font-size:12px; font-weight:700; color:var(--text-secondary); }
+.profile-edit-control { display:flex; gap:8px; align-items:center; }
+.profile-input { flex:1; min-width:0; height:38px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); color:var(--text-primary); padding:0 11px; outline:none; font-size:13px; }
+.profile-input:focus { border-color:var(--blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+.profile-id-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding-top:15px; }
+.profile-id-row > div { min-width:0; flex:1; }
+.profile-id-row span { display:block; margin-bottom:7px; font-size:12px; color:var(--text-secondary); }
+.profile-id-row code { display:block; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; font-size:12px; line-height:1.55; color:var(--text-primary); overflow-wrap:anywhere; }
+.copy-id-button { flex:0 0 auto; }
+
+/* Remove the old header breadcrumb entirely; controls/search remain. */
+.topbar { justify-content:flex-end; }
+.topbar-brand { display:none !important; }
+
+@media (max-width: 760px) {
+  .health-values { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .profile-id-row { align-items:flex-start; flex-direction:column; }
+  .copy-id-button { width:100%; }
+}

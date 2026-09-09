@@ -16,6 +16,9 @@ import {
 import {
   Activity,
   AlertTriangle,
+  FileStack,
+  ScanSearch,
+  ShieldAlert,
   ArrowUpRight,
   BadgeCheck,
   Bell,
@@ -82,7 +85,7 @@ function Login({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState(
-    localStorage.getItem("sentinel-theme") || "dark"
+    localStorage.getItem("sentinel-theme") || "light"
   );
 
   async function submit(event) {
@@ -530,47 +533,11 @@ function Records({
 /* -------------------------------------------------------------------------- */
 
 function RegistryHealth({ docs }) {
-  /*
-   * IMPORTANT:
-   *
-   * These bars are NOT pretending to be blockchain block numbers,
-   * validator counts, or fabricated historical blockchain statistics.
-   *
-   * They are a visual health/activity indicator derived from the
-   * records currently loaded from the backend.
-   */
-
-  const verified = docs.filter(
-    (doc) => getStatus(doc.status) === "verified"
-  ).length;
-
-  const review = docs.filter(
-    (doc) => doc.aiRiskFlag === "review_recommended"
-  ).length;
-
-  const tampered = docs.filter(
-    (doc) => getStatus(doc.status) === "tampered"
-  ).length;
-
   const total = docs.length;
-
-  const bars = useMemo(() => {
-    if (!total) {
-      return Array.from({ length: 12 }, () => 0);
-    }
-
-    const healthyRatio = verified / total;
-
-    const base = Math.max(0.2, healthyRatio);
-
-    return Array.from({ length: 12 }, (_, index) => {
-      const variation = [0.68, 0.82, 0.74, 0.94, 0.86, 1, 0.9, 1.04, 0.92, 1.08, 0.98, 1.12][
-        index
-      ];
-
-      return Math.min(1, base * variation);
-    });
-  }, [total, verified]);
+  const verified = docs.filter((doc) => getStatus(doc.status) === "verified").length;
+  const review = docs.filter((doc) => doc.aiRiskFlag === "review_recommended").length;
+  const tampered = docs.filter((doc) => getStatus(doc.status) === "tampered").length;
+  const verifiedRatio = total ? Math.round((verified / total) * 100) : 0;
 
   const healthLabel =
     tampered > 0
@@ -580,40 +547,31 @@ function RegistryHealth({ docs }) {
       : "Integrity healthy";
 
   return (
-    <section className="panel">
+    <section className="panel registry-health-panel">
       <div className="panel-head">
         <div>
           <h2>Registry health</h2>
           <p>Current integrity activity across the workspace.</p>
         </div>
-
-        <span className="live-pill">LIVE</span>
+        <span className={`health-state ${tampered > 0 ? "bad" : review > 0 ? "warn" : "good"}`}>
+          {healthLabel}
+        </span>
       </div>
 
-      <div className="health-chart" aria-label="Registry health activity">
-        {bars.map((height, index) => (
-          <i
-            key={index}
-            style={{
-              height: `${Math.max(4, height * 100)}%`,
-            }}
-            title={`Activity indicator ${index + 1}`}
-          />
-        ))}
+      <div className="health-summary">
+        <strong>{verifiedRatio}%</strong>
+        <span>verified integrity records</span>
       </div>
 
-      <div className="legend">
-        <span>
-          <i className="dot" />
-          Verified <b>{verified}</b>
-        </span>
+      <div className="health-progress" aria-label={`Registry health ${verifiedRatio}% verified`}>
+        <span style={{ width: `${verifiedRatio}%` }} />
+      </div>
 
-        <span>
-          <i className="dot amber" />
-          Review <b>{review}</b>
-        </span>
-
-        <span className="muted">{healthLabel}</span>
+      <div className="health-values">
+        <span><b>{total}</b> Total</span>
+        <span><b>{verified}</b> Verified</span>
+        <span><b>{review}</b> Review</span>
+        <span><b>{tampered}</b> Integrity issues</span>
       </div>
     </section>
   );
@@ -792,21 +750,21 @@ function Dashboard({
         <Metric
           label="Total documents"
           value={docs.length}
-          icon={FolderOpen}
+          icon={FileStack}
           onClick={() => filterRecords("all")}
         />
 
         <Metric
           label="Verified records"
           value={verifiedCount}
-          icon={ShieldCheck}
+          icon={BadgeCheck}
           onClick={() => filterRecords("verified")}
         />
 
         <Metric
           label="AI review recommended"
           value={reviewCount}
-          icon={AlertTriangle}
+          icon={ScanSearch}
           tone="amber"
           onClick={() => navigate("review")}
         />
@@ -814,7 +772,7 @@ function Dashboard({
         <Metric
           label="Integrity issues"
           value={tamperedCount}
-          icon={Blocks}
+          icon={ShieldAlert}
           tone={tamperedCount > 0 ? "red" : ""}
           onClick={() => filterRecords("tampered")}
         />
@@ -1567,6 +1525,8 @@ function Topbar({
   profile,
   logoutUser,
   mobileMenu,
+  theme,
+  onToggleTheme,
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const ref = useRef(null);
@@ -1599,16 +1559,6 @@ function Topbar({
       >
         <Menu size={20} />
       </button>
-
-      <div className="topbar-brand">
-        <img className="topbar-logo" src={nyayaSetuMark} alt="NyayaSetu" />
-
-        <strong>NyayaSetu</strong>
-
-        <span>/</span>
-
-        <b>{title}</b>
-      </div>
 
       <form
         className="global-search"
@@ -1650,23 +1600,9 @@ function Topbar({
           className="icon-button"
           type="button"
           aria-label="Toggle theme"
-          onClick={() => {
-            const current =
-              localStorage.getItem("sentinel-theme") || "dark";
-
-            const next = current === "dark" ? "light" : "dark";
-
-            localStorage.setItem("sentinel-theme", next);
-
-            window.location.reload();
-          }}
+          onClick={onToggleTheme}
         >
-          {(localStorage.getItem("sentinel-theme") || "dark") ===
-          "dark" ? (
-            <Sun size={18} />
-          ) : (
-            <Moon size={18} />
-          )}
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
         <div className="menu-anchor">
@@ -1733,16 +1669,18 @@ function App({ onLogout }) {
   const [notice, setNotice] = useState("");
   const [mobile, setMobile] = useState(false);
   const [recordsFilter, setRecordsFilter] = useState("all");
-
-  const user = useMemo(() => {
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem("sentinel-theme") || "light"
+  );
+  const [profile, setProfile] = useState(() => {
     try {
-      return JSON.parse(
-        localStorage.getItem("sentinel-user") || "null"
-      );
+      return JSON.parse(localStorage.getItem("sentinel-user") || "null");
     } catch {
       return null;
     }
-  }, []);
+  });
+
+  const user = profile;
 
   const noticeTimer = useRef(null);
 
@@ -1869,8 +1807,25 @@ function App({ onLogout }) {
     setSelectedId(null);
     setPage("dashboard");
     setError("");
+    setProfile(null);
 
     onLogout();
+  }
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("sentinel-theme", next);
+  }
+
+  function updateProfileUsername(nextUsername) {
+    const clean = nextUsername.trim();
+    if (!clean || !profile) return false;
+    const nextProfile = { ...profile, username: clean };
+    setProfile(nextProfile);
+    localStorage.setItem("sentinel-user", JSON.stringify(nextProfile));
+    notify("Profile username updated.");
+    return true;
   }
 
   function filterRecords(value) {
@@ -1894,13 +1849,15 @@ function App({ onLogout }) {
   };
 
   return (
-    <div className="app-shell connected-app dark">
+    <div className={`app-shell connected-app ${theme}`}>
       <Topbar
         title={titles[page] || "Dashboard"}
         navigate={navigate}
         profile={user || {}}
         logoutUser={logoutUser}
         mobileMenu={() => setMobile((value) => !value)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       <div className="app-body">
@@ -2098,9 +2055,26 @@ function App({ onLogout }) {
                       </div>
                     </div>
 
-                    <div className="info-row">
-                      <span>Username</span>
-                      <b>{user?.username || "—"}</b>
+                    <div className="profile-edit-row">
+                      <label>Username</label>
+                      <div className="profile-edit-control">
+                        <input
+                          className="profile-input"
+                          value={user?.username || ""}
+                          onChange={(event) =>
+                            setProfile((current) =>
+                              current ? { ...current, username: event.target.value } : current
+                            )
+                          }
+                        />
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => updateProfileUsername(user?.username || "")}
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
 
                     <div className="info-row">
@@ -2108,9 +2082,26 @@ function App({ onLogout }) {
                       <b>{user?.role || "—"}</b>
                     </div>
 
-                    <div className="info-row">
-                      <span>User ID</span>
-                      <b>{shortId(user?.userId, 30)}</b>
+                    <div className="profile-id-row">
+                      <div>
+                        <span>User ID</span>
+                        <code>{user?.userId || "—"}</code>
+                      </div>
+                      <button
+                        className="secondary-button copy-id-button"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(user?.userId || "");
+                            notify("User ID copied.");
+                          } catch {
+                            notify("Unable to copy User ID.");
+                          }
+                        }}
+                        disabled={!user?.userId}
+                      >
+                        Copy ID
+                      </button>
                     </div>
                   </section>
                 </div>
