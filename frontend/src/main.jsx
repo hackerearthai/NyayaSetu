@@ -1032,12 +1032,23 @@ function DetailPage({
   async function runDemoRestore() {
     setError("");
     setDemoBusy("restore");
+    setVerifyResult(null);
 
     try {
       await restoreOriginal(doc.docId);
+
+      // Re-check the restored file against the immutable blockchain hash.
+      // Do not depend on the restore endpoint's response shape; verification
+      // is the source of truth for the demo state.
+      const verification = await onVerify(doc, true);
+
+      if (verification?.status !== "verified") {
+        throw new Error("Original file was restored, but its integrity could not be verified.");
+      }
+
       setDemoState("restored");
-      setVerifyResult(null);
-      notify("Original registered file restored. Verify integrity again.");
+      setVerifyResult(verification);
+      notify("Original file restored and blockchain integrity verified.");
       await load();
     } catch (error) {
       setError(error.message || "Demo restore failed.");
@@ -1052,7 +1063,7 @@ function DetailPage({
         ← Back to records
       </button>
 
-      <div className="detail-top">
+      <div className="detail-top" style={{ alignItems: "flex-start" }}>
         <div>
           <span className="eyebrow">DOCUMENT RECORD</span>
 
