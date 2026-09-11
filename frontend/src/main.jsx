@@ -15,6 +15,8 @@ import {
   getDocumentHistory,
   verifyDocument,
   uploadDocument,
+  simulateTampering,
+  restoreOriginal,
 } from "./api";
 
 import {
@@ -968,6 +970,8 @@ function DetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [verifyResult, setVerifyResult] = useState(null);
+  const [demoBusy, setDemoBusy] = useState("");
+  const [demoState, setDemoState] = useState("");
 
   async function load() {
     setLoading(true);
@@ -1005,6 +1009,40 @@ function DetailPage({
       );
     } catch (error) {
       setError(error.message || "Verification failed.");
+    }
+  }
+
+  async function runDemoTamper() {
+    setError("");
+    setDemoBusy("tamper");
+
+    try {
+      const result = await simulateTampering(doc.docId);
+      setDemoState("tampered");
+      setVerifyResult(null);
+      notify("Demo tampering applied. Verify integrity to see the hash mismatch.");
+      await load();
+    } catch (error) {
+      setError(error.message || "Demo tampering failed.");
+    } finally {
+      setDemoBusy("");
+    }
+  }
+
+  async function runDemoRestore() {
+    setError("");
+    setDemoBusy("restore");
+
+    try {
+      await restoreOriginal(doc.docId);
+      setDemoState("restored");
+      setVerifyResult(null);
+      notify("Original registered file restored. Verify integrity again.");
+      await load();
+    } catch (error) {
+      setError(error.message || "Demo restore failed.");
+    } finally {
+      setDemoBusy("");
     }
   }
 
@@ -1077,6 +1115,43 @@ function DetailPage({
       ) : (
         detail && (
           <>
+            <section className="panel tamper-demo-panel">
+              <PanelHead
+                title="Tamper Detection Demo"
+                subtitle="Test whether the registered evidence has been modified since blockchain registration."
+              />
+
+              <div className="tamper-demo-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={runDemoTamper}
+                  disabled={Boolean(demoBusy)}
+                >
+                  <AlertTriangle size={14} />
+                  {demoBusy === "tamper" ? "Simulating..." : "Simulate Tampering"}
+                </button>
+
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={runDemoRestore}
+                  disabled={Boolean(demoBusy) || demoState !== "tampered"}
+                >
+                  <ShieldCheck size={14} />
+                  {demoBusy === "restore" ? "Restoring..." : "Restore Original"}
+                </button>
+              </div>
+
+              {demoState && (
+                <small className="tamper-demo-note">
+                  {demoState === "tampered"
+                    ? "Demo modification applied. Click Verify integrity above to detect the changed hash."
+                    : "Original registered file restored. Click Verify integrity above to confirm the hash matches."}
+                </small>
+              )}
+            </section>
+
             <div className="detail-grid">
               <section className="panel">
                 <PanelHead

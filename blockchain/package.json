@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "ganache": "^7.9.2",
     "hardhat": "^2.22.0"
   },
   "dependencies": {

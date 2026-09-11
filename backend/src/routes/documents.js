@@ -236,6 +236,9 @@ router.get('/:docId', async (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
+    // Only supported on-chain access actions are view/download/share.
+    await chain.logAccess(docId, req.user.userId, 'view');
+
     const doc = result.rows[0];
 
     const versions = await db.query(
@@ -243,26 +246,12 @@ router.get('/:docId', async (req, res) => {
       [docId],
     );
 
-    // Detail loading must not fail just because an access-log/history read
-    // temporarily fails. The document metadata and version history are still
-    // useful, while Verify Integrity performs the actual cryptographic check.
-    let accessLog = [];
-    let blockchainAvailable = true;
-
-    try {
-      // Only supported on-chain access actions are view/download/share.
-      await chain.logAccess(docId, req.user.userId, 'view');
-      accessLog = await chain.getDocumentHistory(docId) || [];
-    } catch (chainError) {
-      blockchainAvailable = false;
-      console.warn(`[DETAIL] Blockchain history unavailable for ${docId}:`, chainError.message);
-    }
+    const onChainHistory = await chain.getDocumentHistory(docId);
 
     return res.json({
       ...doc,
       versions: versions.rows,
-      accessLog,
-      blockchainAvailable,
+      accessLog: onChainHistory || [],
     });
   } catch (err) {
     console.error('[DETAIL] Error:', err);
@@ -317,21 +306,7 @@ router.post('/:docId/verify', async (req, res) => {
     });
   } catch (err) {
     console.error('[VERIFY] Error:', err);
-
-    const message = err?.message || 'Verification failed';
-
-    if (/Document does not exist/i.test(message)) {
-      return res.status(409).json({
-        error: 'Blockchain record not found',
-        code: 'BLOCKCHAIN_RECORD_NOT_FOUND',
-        message: 'This database record is not present on the currently connected blockchain registry. The local Hardhat chain may have been reset or the contract may have been redeployed.',
-      });
-    }
-
-    return res.status(500).json({
-      error: 'Verification failed',
-      message,
-    });
+    return res.status(500).json({ error: 'Verification failed' });
   }
 });
 
