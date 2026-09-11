@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const sharp = require('sharp');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
@@ -11,9 +13,10 @@ const chain = require('../blockchain/contract');
 const { analyzeDocument } = require('../services/aiService');
 const { findSimilarDocuments } = require('../services/documentSimilarity');
 
+sharp.cache(false);
+
 const router = express.Router();
 
-// ─── Multer config ──────────────────────────────────────────
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || './uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -32,7 +35,6 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-// ─── Helpers ────────────────────────────────────────────────
 function hashFile(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -54,7 +56,18 @@ function removeFileQuietly(filePath) {
   }
 }
 
-// All routes below require JWT.
+async function copyFileWithRetry(src, dest, retries = 5, delay = 100) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await fs.promises.copyFile(src, dest);
+      return;
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise((res) => setTimeout(res, delay));
+    }
+  }
+}
+
 router.use(authMiddleware);
 
 // ═════════════════════════════════════════════════════════════
@@ -71,17 +84,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const filename = req.file.originalname;
     const docId = uuidv4();
 
-    // 1. Compute SHA-256.
     const docHash = await hashFile(filePath);
-
-    // 2. Pre-registration screening. AI remains a risk flag only; it never
-    // silently changes the blockchain workflow.
     const { aiRiskFlag } = await analyzeDocument(filePath, filename);
 
-    // 3. Detect an attempted re-upload of an already registered document.
-    // Exact SHA-256 catches byte-for-byte duplicates. Visual/text similarity
-    // catches modified copies whose SHA-256 is different. We block the new
-    // registration and return the matching existing record for human review.
     const exactMatch = await db.query(
       'SELECT "docId", filename, "docHash", timestamp FROM documents WHERE "docHash" = $1 LIMIT 1',
       [docHash],
@@ -133,8 +138,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    // 4. Register the integrity record on-chain.
-    // Do not silently return success if blockchain registration failed.
     const chainResult = await chain.registerDocument(docId, docHash, uploaderId);
     if (!chainResult) {
       removeFileQuietly(filePath);
@@ -144,7 +147,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    // 5. Save metadata only after successful blockchain registration.
     await db.query(
       `INSERT INTO documents ("docId", filename, filepath, "docHash", "uploaderId", timestamp, "aiRiskFlag", "currentVersion")
        VALUES ($1, $2, $3, $4, $5, NOW(), $6, 1)`,
@@ -225,8 +227,6 @@ router.get('/:docId', async (req, res) => {
   try {
     const { docId } = req.params;
 
-    // Fetch DB record first so a missing document returns 404 instead of
-    // failing on the blockchain access-log call.
     const result = await db.query(
       'SELECT * FROM documents WHERE "docId" = $1',
       [docId],
@@ -236,7 +236,6 @@ router.get('/:docId', async (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // Only supported on-chain access actions are view/download/share.
     await chain.logAccess(docId, req.user.userId, 'view');
 
     const doc = result.rows[0];
@@ -293,11 +292,6 @@ router.post('/:docId/verify', async (req, res) => {
 
     const status = chainResult.verified ? 'verified' : 'tampered';
 
-    // IMPORTANT:
-    // Do not call chain.logAccess(..., 'verify'). The current contract only
-    // accepts view/download/share, so that call would revert.
-    // Verification is a read-only blockchain operation and is returned here.
-
     return res.json({
       status,
       onChainHash: chainResult.onChainHash,
@@ -307,6 +301,66 @@ router.post('/:docId/verify', async (req, res) => {
   } catch (err) {
     console.error('[VERIFY] Error:', err);
     return res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// Evidence Preview Routes
+// ═════════════════════════════════════════════════════════════
+router.get('/:docId/file/:type?', async (req, res) => {
+  try {
+    const { docId, type } = req.params;
+    const result = await db.query(
+      'SELECT filepath, filename FROM documents WHERE "docId" = $1',
+      [docId],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Document not found' });
+
+    const currentPath = path.resolve(result.rows[0].filepath);
+    let targetPath = currentPath;
+
+    if (type === 'original') {
+      const backupPath = `${currentPath}.sentinel-original`;
+      if (fs.existsSync(backupPath)) {
+        targetPath = backupPath;
+      }
+    }
+
+    if (!fs.existsSync(targetPath)) return res.status(404).json({ error: 'File not found on disk' });
+
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Disposition', `inline; filename="${String(result.rows[0].filename).replace(/"/g, '')}"`);
+    return res.sendFile(targetPath);
+  } catch (err) {
+    console.error('[FILE-PREVIEW] Error:', err);
+    return res.status(500).json({ error: 'Unable to preview document' });
+  }
+});
+
+router.get('/:docId/demo-original', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const result = await db.query(
+      'SELECT filepath, filename FROM documents WHERE "docId" = $1',
+      [docId],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Document not found' });
+
+    const currentPath = path.resolve(result.rows[0].filepath);
+    const backupPath = `${currentPath}.sentinel-original`;
+    const filePath = fs.existsSync(backupPath) ? backupPath : currentPath;
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Original file not found on disk' });
+
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Disposition', `inline; filename="${String(result.rows[0].filename).replace(/"/g, '')}"`);
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('[ORIGINAL-PREVIEW] Error:', err);
+    return res.status(500).json({ error: 'Unable to preview original document' });
   }
 });
 
@@ -332,10 +386,94 @@ router.post('/:docId/demo-tamper', async (req, res) => {
 
     const backupPath = `${filepath}.sentinel-original`;
     if (!fs.existsSync(backupPath)) {
-      fs.copyFileSync(filepath, backupPath);
+      await copyFileWithRetry(filepath, backupPath);
     }
 
-    fs.appendFileSync(filepath, Buffer.from('\nSENTINEL_DEMO_TAMPERED\n', 'utf8'));
+    const ext = path.extname(filepath).toLowerCase();
+
+    if (ext === '.pdf') {
+      try {
+        const existingPdfBytes = await fs.promises.readFile(filepath);
+        const pdfDoc = await PDFDocument.load(existingPdfBytes);
+        const pages = pdfDoc.getPages();
+        const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+        pages.forEach((page) => {
+          const { width, height } = page.getSize();
+
+          // 1. Exactly match the reference image: "Ram Nair (fictional)" with precise right-shift offset
+          page.drawRectangle({
+            x: width * 0.335,
+            y: height * 0.770,
+            width: width * 0.36,
+            height: height * 0.026,
+            color: rgb(1, 1, 1),
+          });
+          page.drawText('Ram Nair (fictional)', {
+            x: width * 0.352,
+            y: height * 0.775,
+            size: 11,
+            font: fontRegular,
+            color: rgb(0, 0, 0),
+          });
+
+          // 2. Exactly match the reference image: "90,000" perfectly centered in the price column
+          page.drawRectangle({
+            x: width * 0.640,
+            y: height * 0.268,
+            width: width * 0.16,
+            height: height * 0.028,
+            color: rgb(1, 1, 1),
+          });
+          page.drawText('90,000', {
+            x: width * 0.702,
+            y: height * 0.274,
+            size: 11,
+            font: fontRegular,
+            color: rgb(0, 0, 0),
+          });
+        });
+
+        const modifiedPdfBytes = await pdfDoc.save();
+        await fs.promises.writeFile(filepath, modifiedPdfBytes);
+      } catch (pdfErr) {
+        console.warn('[DEMO-TAMPER] PDF fallback applied:', pdfErr.message);
+        await fs.promises.appendFile(filepath, Buffer.from('\nSENTINEL_DEMO_TAMPERED_RECORD\n', 'utf8'));
+      }
+    } else {
+      try {
+        const fileBuffer = await fs.promises.readFile(filepath);
+        const metadata = await sharp(fileBuffer).metadata();
+        const width = metadata.width || 800;
+        const height = metadata.height || 1000;
+
+        const svgOverlay = Buffer.from(`
+          <svg width="${width}" height="${height}">
+            <!-- Exact replica text: Ram Nair (fictional) with matching alignment -->
+            <rect x="${Math.floor(width * 0.335)}" y="${Math.floor(height * 0.220)}" width="${Math.floor(width * 0.36)}" height="${Math.floor(height * 0.028)}" fill="white" />
+            <text x="${Math.floor(width * 0.352)}" y="${Math.floor(height * 0.240)}" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">
+              Ram Nair (fictional)
+            </text>
+
+            <!-- Exact replica text: 90,000 perfectly centered -->
+            <rect x="${Math.floor(width * 0.640)}" y="${Math.floor(height * 0.696)}" width="${Math.floor(width * 0.16)}" height="${Math.floor(height * 0.030)}" fill="white" />
+            <text x="${Math.floor(width * 0.702)}" y="${Math.floor(height * 0.716)}" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">
+              90,000
+            </text>
+          </svg>
+        `);
+
+        const modifiedBuffer = await sharp(fileBuffer)
+          .composite([{ input: svgOverlay, top: 0, left: 0 }])
+          .toBuffer();
+
+        await fs.promises.writeFile(filepath, modifiedBuffer);
+      } catch (sharpError) {
+        console.warn('[DEMO-TAMPER] Sharp fallback applied:', sharpError.message);
+        await fs.promises.appendFile(filepath, Buffer.from('\nSENTINEL_DEMO_TAMPERED_RECORD\n', 'utf8'));
+      }
+    }
+
     const currentHash = await hashFile(filepath);
 
     return res.json({
@@ -376,7 +514,7 @@ router.post('/:docId/demo-restore', async (req, res) => {
       });
     }
 
-    fs.copyFileSync(backupPath, filepath);
+    await copyFileWithRetry(backupPath, filepath);
     removeFileQuietly(backupPath);
     const currentHash = await hashFile(filepath);
 
@@ -426,7 +564,6 @@ router.post('/:docId/version', upload.single('file'), async (req, res) => {
     const newVersion = Number(docResult.rows[0].currentVersion) + 1;
     const newHash = await hashFile(filePath);
 
-    // Blockchain is the source of integrity truth for the version chain.
     const chainResult = await chain.addVersion(docId, newHash, reason, updatedBy);
     if (!chainResult) {
       removeFileQuietly(filePath);
@@ -462,15 +599,12 @@ router.post('/:docId/version', upload.single('file'), async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════
-// 6. GET /api/documents/:docId/history
+// 8. GET /api/documents/:docId/history
 // ═════════════════════════════════════════════════════════════
 router.get('/:docId/history', async (req, res) => {
   try {
     const { docId } = req.params;
 
-    // IMPORTANT:
-    // Do not call chain.logAccess(..., 'view_history'). The Solidity contract
-    // intentionally accepts only view/download/share.
     const history = await chain.getDocumentHistory(docId);
 
     if (history === null) {

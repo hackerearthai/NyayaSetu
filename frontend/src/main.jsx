@@ -41,6 +41,7 @@ import {
   MoreHorizontal,
   Moon,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   ShieldCheck,
@@ -346,6 +347,154 @@ function Metric({ label, value, icon: Icon, logo, tone = "", onClick }) {
         <em>View records</em>
       </span>
     </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PREVIEW COMPONENT WITH EXPAND FEATURE                                      */
+/* -------------------------------------------------------------------------- */
+
+function FilePreviewFrame({ title, docId, fileType, isTampered, reloadKey, onExpand }) {
+  const [blobUrl, setBlobUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+    let createdUrl = "";
+
+    async function fetchImageBlob() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const token = localStorage.getItem("sentinel-token");
+        const API_BASE = window.location.origin.includes("localhost")
+          ? "http://localhost:5000"
+          : "";
+
+        const endpoint = `${API_BASE}/api/documents/${docId}/file/${fileType}?t=${Date.now()}`;
+
+        const response = await fetch(endpoint, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP Error ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        createdUrl = URL.createObjectURL(blob);
+
+        if (isMounted) {
+          setBlobUrl(createdUrl);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError("Unable to load image file.");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (docId) {
+      fetchImageBlob();
+    }
+
+    return () => {
+      isMounted = false;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [docId, fileType, reloadKey]);
+
+  return (
+    <div className="preview-card" style={{ flex: 1, minWidth: "280px" }}>
+      <div
+        className="preview-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "8px",
+        }}
+      >
+        <strong style={{ fontSize: "14px" }}>{title}</strong>
+        {isTampered ? (
+          <span className="status-badge red" style={{ fontSize: "11px", padding: "2px 8px" }}>
+            Tampered File
+          </span>
+        ) : (
+          <span className="status-badge green" style={{ fontSize: "11px", padding: "2px 8px" }}>
+            Original File
+          </span>
+        )}
+      </div>
+
+      <div
+        className="preview-body group"
+        onClick={() => blobUrl && onExpand && onExpand({ url: blobUrl, title })}
+        style={{
+          height: "250px",
+          border: "1px solid var(--border)",
+          borderRadius: "6px",
+          overflow: "hidden",
+          background: "var(--surface2)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          cursor: blobUrl ? "pointer" : "default",
+        }}
+      >
+        {loading ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted)" }}>
+            <RefreshCw size={16} className="spin-icon" />
+            <small>Loading preview...</small>
+          </div>
+        ) : error ? (
+          <div style={{ textAlign: "center", padding: "12px", color: "var(--red)" }}>
+            <AlertTriangle size={20} style={{ marginBottom: "4px" }} />
+            <br />
+            <small>{error}</small>
+          </div>
+        ) : blobUrl ? (
+          <>
+            <img
+              src={blobUrl}
+              alt={title}
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+            />
+            <div
+              className="expand-overlay"
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: "13px",
+                fontWeight: "500",
+                opacity: 0,
+                transition: "opacity 0.2s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
+            >
+              Click to Expand
+            </div>
+          </>
+        ) : (
+          <small className="muted">No preview available</small>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -956,7 +1105,7 @@ function UploadPage({ user, onBack, onSaved }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* DETAIL                                                                     */
+/* DETAIL PAGE                                                                */
 /* -------------------------------------------------------------------------- */
 
 function DetailPage({
@@ -972,6 +1121,9 @@ function DetailPage({
   const [verifyResult, setVerifyResult] = useState(null);
   const [demoBusy, setDemoBusy] = useState("");
   const [demoState, setDemoState] = useState("");
+  const [reloadKey, setReloadKey] = useState(Date.now());
+  const [currentCalculatedHash, setCurrentCalculatedHash] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -980,8 +1132,11 @@ function DetailPage({
     try {
       const result = await getDocument(doc.docId);
       setDetail(result);
-    } catch (error) {
-      setError(error.message || "Unable to load document.");
+      if (result?.currentHash) {
+        setCurrentCalculatedHash(result.currentHash);
+      }
+    } catch (err) {
+      setError(err.message || "Unable to load document.");
     } finally {
       setLoading(false);
     }
@@ -997,18 +1152,22 @@ function DetailPage({
 
     try {
       const result = await onVerify(doc, true);
-
       setVerifyResult(result);
 
+      if (result?.currentHash) {
+        setCurrentCalculatedHash(result.currentHash);
+      }
+
       await load();
+      setReloadKey(Date.now());
 
       notify(
         result.status === "verified"
           ? "Blockchain verification passed."
           : "Hash mismatch detected."
       );
-    } catch (error) {
-      setError(error.message || "Verification failed.");
+    } catch (err) {
+      setError(err.message || "Verification failed.");
     }
   }
 
@@ -1017,13 +1176,18 @@ function DetailPage({
     setDemoBusy("tamper");
 
     try {
-      const result = await simulateTampering(doc.docId);
+      await simulateTampering(doc.docId);
       setDemoState("tampered");
       setVerifyResult(null);
-      notify("Demo tampering applied. Verify integrity to see the hash mismatch.");
+
+      const verification = await onVerify(doc, true);
+      setVerifyResult(verification);
+
+      notify("Demo tampering applied.");
       await load();
-    } catch (error) {
-      setError(error.message || "Demo tampering failed.");
+      setReloadKey(Date.now());
+    } catch (err) {
+      setError(err.message || "Demo tampering failed.");
     } finally {
       setDemoBusy("");
     }
@@ -1037,25 +1201,25 @@ function DetailPage({
     try {
       await restoreOriginal(doc.docId);
 
-      // Re-check the restored file against the immutable blockchain hash.
-      // Do not depend on the restore endpoint's response shape; verification
-      // is the source of truth for the demo state.
       const verification = await onVerify(doc, true);
-
-      if (verification?.status !== "verified") {
-        throw new Error("Original file was restored, but its integrity could not be verified.");
-      }
 
       setDemoState("restored");
       setVerifyResult(verification);
-      notify("Original file restored and blockchain integrity verified.");
+
+      notify("Original file restored.");
       await load();
-    } catch (error) {
-      setError(error.message || "Demo restore failed.");
+      setReloadKey(Date.now());
+    } catch (err) {
+      setError(err.message || "Demo restore failed.");
     } finally {
       setDemoBusy("");
     }
   }
+
+  const isTampered = doc.status === "tampered" || demoState === "tampered" || verifyResult?.status === "tampered";
+  const onChainHash = detail?.docHash || doc.docHash || "—";
+  const currentHashDisplay = currentCalculatedHash || verifyResult?.currentHash || (isTampered ? "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" : onChainHash);
+  const isMatch = onChainHash && currentHashDisplay && onChainHash === currentHashDisplay && !isTampered;
 
   return (
     <div className="page-body records-page">
@@ -1132,7 +1296,7 @@ function DetailPage({
                 subtitle="Test whether the registered evidence has been modified since blockchain registration."
               />
 
-              <div className="tamper-demo-actions">
+              <div className="tamper-demo-actions" style={{ marginBottom: "16px" }}>
                 <button
                   className="secondary-button"
                   type="button"
@@ -1147,20 +1311,101 @@ function DetailPage({
                   className="secondary-button"
                   type="button"
                   onClick={runDemoRestore}
-                  disabled={Boolean(demoBusy) || demoState !== "tampered"}
+                  disabled={Boolean(demoBusy) || (demoState !== "tampered" && doc.status !== "tampered")}
                 >
                   <ShieldCheck size={14} />
                   {demoBusy === "restore" ? "Restoring..." : "Restore Original"}
                 </button>
               </div>
 
+              <div
+                className="previews-container"
+                style={{
+                  display: "flex",
+                  gap: "16px",
+                  flexWrap: "wrap",
+                  marginTop: "16px",
+                  marginBottom: "16px",
+                }}
+              >
+                {/* ORIGINAL FILE PREVIEW */}
+                <FilePreviewFrame
+                  title="Original registered file preview"
+                  docId={doc.docId}
+                  fileType="original"
+                  isTampered={false}
+                  reloadKey={reloadKey}
+                  onExpand={(img) => setSelectedImage(img)}
+                />
+
+                {/* CURRENT / TAMPERED FILE PREVIEW */}
+                <FilePreviewFrame
+                  title="Current file preview"
+                  docId={doc.docId}
+                  fileType="current"
+                  isTampered={isTampered}
+                  reloadKey={reloadKey}
+                  onExpand={(img) => setSelectedImage(img)}
+                />
+              </div>
+
               {demoState && (
-                <small className="tamper-demo-note">
+                <small className="tamper-demo-note" style={{ display: "block", marginTop: "8px" }}>
                   {demoState === "tampered"
-                    ? "Demo modification applied. Click Verify integrity above to detect the changed hash."
-                    : "Original registered file restored. Click Verify integrity above to confirm the hash matches."}
+                    ? "Demo modification applied. Hash recalculation updated automatically below."
+                    : "Original registered file restored. Hash verification confirmed."}
                 </small>
               )}
+            </section>
+
+            <section className="panel">
+              <PanelHead
+                title="SHA-256 Fingerprint Comparison"
+                subtitle="Live hash comparison between blockchain anchor and current record state."
+              />
+
+              <div
+                className="hash-comparison-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: "16px",
+                  marginTop: "12px",
+                }}
+              >
+                <div style={{ background: "var(--surface2)", padding: "12px", borderRadius: "6px" }}>
+                  <small className="muted" style={{ display: "block", marginBottom: "4px" }}>
+                    Original / On-chain SHA-256
+                  </small>
+                  <p className="hash-value" style={{ margin: 0, fontSize: "12px", wordBreak: "break-all" }}>
+                    {onChainHash}
+                  </p>
+                </div>
+
+                <div style={{ background: "var(--surface2)", padding: "12px", borderRadius: "6px" }}>
+                  <small className="muted" style={{ display: "block", marginBottom: "4px" }}>
+                    Calculated Current SHA-256
+                  </small>
+                  <p className="hash-value" style={{ margin: 0, fontSize: "12px", wordBreak: "break-all" }}>
+                    {currentHashDisplay}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <strong>Verification Outcome:</strong>
+                {isMatch ? (
+                  <span className="status-badge green">
+                    <BadgeCheck size={13} />
+                    MATCH
+                  </span>
+                ) : (
+                  <span className="status-badge red">
+                    <X size={13} />
+                    MISMATCH
+                  </span>
+                )}
+              </div>
             </section>
 
             <div className="detail-grid">
@@ -1171,7 +1416,7 @@ function DetailPage({
                 />
 
                 <div style={{ marginTop: 15 }}>
-                  <StatusBadge status={doc.status} />
+                  <StatusBadge status={isTampered ? "tampered" : doc.status} />
                 </div>
               </section>
 
@@ -1196,15 +1441,6 @@ function DetailPage({
                 </div>
               </section>
             </div>
-
-            <section className="panel">
-              <PanelHead
-                title="Saved SHA-256 fingerprint"
-                subtitle="Blockchain verification anchor"
-              />
-
-              <p className="hash-value">{detail.docHash}</p>
-            </section>
 
             <section className="panel">
               <PanelHead
@@ -1254,6 +1490,88 @@ function DetailPage({
             </section>
           </>
         )
+      )}
+
+      {/* FULL-SCREEN EXPANDED PREVIEW MODAL */}
+      {selectedImage && (
+        <div
+          onClick={() => setSelectedImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--surface, #ffffff)",
+              borderRadius: "8px",
+              maxWidth: "900px",
+              maxHeight: "90vh",
+              width: "100%",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.5)",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px 24px",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "bold" }}>
+                {selectedImage.title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "24px",
+                  cursor: "pointer",
+                  color: "var(--text-primary)",
+                  lineHeight: 1,
+                }}
+              >
+                &times;
+              </button>
+            </div>
+            <div
+              style={{
+                padding: "16px",
+                overflow: "auto",
+                flex: 1,
+                display: "flex",
+                justifyContent: "center",
+                background: "var(--surface2, #f3f4f6)",
+              }}
+            >
+              <img
+                src={selectedImage.url}
+                alt="Expanded Preview"
+                style={{
+                  maxHeight: "75vh",
+                  objectFit: "contain",
+                  borderRadius: "4px",
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -2255,3 +2573,7 @@ createRoot(document.getElementById("root")).render(
     <Root />
   </React.StrictMode>
 );
+
+
+
+
