@@ -1851,7 +1851,6 @@ function Sidebar({
             ["records", "All records", FolderOpen],
             ["upload", "Upload document", UploadCloud],
             ["activity", "Audit activity", Clock3],
-            ["review", "Review Queue", FileCheck2],
             ["chain", "Chain Explorer", Blocks],
           ].map(([page, label, Icon]) => (
             <button
@@ -2257,7 +2256,6 @@ function App({ onLogout }) {
     records: "All records",
     upload: "Upload document",
     activity: "Audit activity",
-    review: "Review Queue",
     chain: "Chain Explorer",
     detail: "Document detail",
     settings: "Settings",
@@ -2573,6 +2571,7 @@ createRoot(document.getElementById("root")).render(
     <Root />
   </React.StrictMode>
 );
+
 
 
 
