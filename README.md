@@ -16,6 +16,66 @@ NyayaSetu (Sentinel Records) is a secure digital evidence integrity and audit sy
 
 ---
 
+## Screenshots
+
+<div align="center">
+
+### `Dashboard`
+
+<img width="1894" height="944" alt="image" src="https://github.com/user-attachments/assets/3a769e83-c0fd-4f04-8b4e-85eec48f0b3a" />
+<img width="1899" height="885" alt="image" src="https://github.com/user-attachments/assets/db0d72a6-f50f-437c-8259-e71ec2712f19" />
+
+<div align="center">
+
+### `All Records`
+
+<img width="1919" height="943" alt="image" src="https://github.com/user-attachments/assets/aa717eaa-ef9e-412c-83f9-39f0da6b0803" />
+
+<img width="1898" height="947" alt="image" src="https://github.com/user-attachments/assets/514ede31-16db-4e46-b811-27d12fa65fa8" />
+
+<img width="1902" height="895" alt="image" src="https://github.com/user-attachments/assets/9cc6a16a-bdf6-4345-aea9-db901de27f50" />
+
+<div align="center">
+
+#### `Original FIR`
+
+<img width="1919" height="945" alt="image" src="https://github.com/user-attachments/assets/8ad3bb3a-8592-4bf0-99a1-1e191fe05c95" />
+
+<div align="center">
+
+### `Tampered FIR`
+
+<img width="1899" height="943" alt="image" src="https://github.com/user-attachments/assets/8f5cc8c2-c920-416d-a691-7b9170f8ee64" />
+
+<div align="center">
+
+### `Upload Document`
+
+<img width="1919" height="943" alt="image" src="https://github.com/user-attachments/assets/c3e92b9b-9330-4552-84b2-e4c143482419" />
+
+<img width="1919" height="943" alt="image" src="https://github.com/user-attachments/assets/e8993d52-ce23-4748-80d6-d079af9ee961" />
+
+<div align="center">
+
+#### `Uploading a Tampered Document`
+
+<img width="1919" height="944" alt="image" src="https://github.com/user-attachments/assets/a9f0b884-8c26-4cb2-b715-50757a00e0d4" />
+
+<div align="center">
+
+### `Audit Activity`
+
+<img width="1907" height="948" alt="image" src="https://github.com/user-attachments/assets/dbaa172b-80a0-4511-af0c-5883c0f4f08f" />
+
+<div align="center">
+
+### `Chain Explorer`
+
+<img width="1915" height="945" alt="image" src="https://github.com/user-attachments/assets/763030fa-2f2a-4dcf-9d79-ef884c6a898a" />
+
+<img width="1905" height="950" alt="image" src="https://github.com/user-attachments/assets/0150917f-5690-463f-bd62-c6b9470796e6" />
+
+---
 ## 📑 Table of Contents
 
 - [Problem Statement](#-problem-statement)
