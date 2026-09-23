@@ -9,6 +9,7 @@ const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const chain = require('../blockchain/contract');
 const { analyzeDocument } = require('../services/aiService');
 const { findSimilarDocuments } = require('../services/documentSimilarity');
@@ -177,7 +178,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT "docId", filename, "docHash", "uploaderId", timestamp FROM documents ORDER BY timestamp DESC',
+      'SELECT "docId", filename, "docHash", "uploaderId", timestamp, "correctionStatus", "aiRiskFlag" FROM documents ORDER BY timestamp DESC',
     );
 
     const docs = await Promise.all(
@@ -209,6 +210,8 @@ router.get('/', async (req, res) => {
           status,
           uploaderId: doc.uploaderId,
           timestamp: doc.timestamp,
+          correctionStatus: doc.correctionStatus || 'none',
+          aiRiskFlag: doc.aiRiskFlag,
         };
       }),
     );
@@ -236,21 +239,30 @@ router.get('/:docId', async (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    await chain.logAccess(docId, req.user.userId, 'view');
+    try { await chain.logAccess(docId, req.user.userId, 'view'); }
+    catch (e) { console.warn('[DETAIL] logAccess failed (non-fatal):', e.message); }
 
     const doc = result.rows[0];
 
     const versions = await db.query(
-      'SELECT version, "docHash", reason, "updatedBy", timestamp FROM document_versions WHERE "docId" = $1 ORDER BY version ASC',
+      `SELECT version,
+              "docHash",
+              LAG("docHash") OVER (ORDER BY version ASC) AS "previousHash",
+              reason, "updatedBy", timestamp
+         FROM document_versions
+        WHERE "docId" = $1
+        ORDER BY version ASC`,
       [docId],
     );
 
-    const onChainHistory = await chain.getDocumentHistory(docId);
+    let onChainHistory = [];
+    try { onChainHistory = await chain.getDocumentHistory(docId) || []; }
+    catch (e) { console.warn('[DETAIL] getDocumentHistory failed (non-fatal):', e.message); }
 
     return res.json({
       ...doc,
       versions: versions.rows,
-      accessLog: onChainHistory || [],
+      accessLog: onChainHistory,
     });
   } catch (err) {
     console.error('[DETAIL] Error:', err);
@@ -339,6 +351,27 @@ router.get('/:docId/file/:type?', async (req, res) => {
   }
 });
 
+router.get('/:docId/version/:version/file', async (req, res) => {
+  try {
+    const { docId, version } = req.params;
+    const result = await db.query(
+      'SELECT filepath FROM document_versions WHERE "docId" = $1 AND version = $2',
+      [docId, version],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Version not found' });
+    
+    const targetPath = path.resolve(result.rows[0].filepath);
+    if (!fs.existsSync(targetPath)) return res.status(404).json({ error: 'File not found on disk' });
+
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Content-Disposition', `inline; filename="version-${version}.pdf"`);
+    return res.sendFile(targetPath);
+  } catch (err) {
+    console.error('[VERSION-PREVIEW] Error:', err);
+    return res.status(500).json({ error: 'Unable to preview version' });
+  }
+});
+
 router.get('/:docId/demo-original', async (req, res) => {
   try {
     const { docId } = req.params;
@@ -365,7 +398,7 @@ router.get('/:docId/demo-original', async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════
-// 5. POST /api/documents/:docId/demo-tamper
+// 5. POST /api/documents/:docId/demo-tamper  [demo]
 // ═════════════════════════════════════════════════════════════
 router.post('/:docId/demo-tamper', async (req, res) => {
   try {
@@ -419,15 +452,15 @@ router.post('/:docId/demo-tamper', async (req, res) => {
 
           // 2. Exactly match the reference image: "90,000" perfectly centered in the price column
           page.drawRectangle({
-            x: width * 0.640,
-            y: height * 0.268,
-            width: width * 0.16,
+            x: width * 0.810,
+            y: height * 0.252,
+            width: width * 0.15,
             height: height * 0.028,
             color: rgb(1, 1, 1),
           });
           page.drawText('90,000', {
-            x: width * 0.702,
-            y: height * 0.274,
+            x: width * 0.840,
+            y: height * 0.258,
             size: 11,
             font: fontRegular,
             color: rgb(0, 0, 0),
@@ -456,8 +489,8 @@ router.post('/:docId/demo-tamper', async (req, res) => {
             </text>
 
             <!-- Exact replica text: 90,000 perfectly centered -->
-            <rect x="${Math.floor(width * 0.640)}" y="${Math.floor(height * 0.696)}" width="${Math.floor(width * 0.16)}" height="${Math.floor(height * 0.030)}" fill="white" />
-            <text x="${Math.floor(width * 0.702)}" y="${Math.floor(height * 0.716)}" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">
+            <rect x="${Math.floor(width * 0.810)}" y="${Math.floor(height * 0.720)}" width="${Math.floor(width * 0.15)}" height="${Math.floor(height * 0.030)}" fill="white" />
+            <text x="${Math.floor(width * 0.840)}" y="${Math.floor(height * 0.740)}" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000">
               90,000
             </text>
           </svg>
@@ -490,7 +523,7 @@ router.post('/:docId/demo-tamper', async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════
-// 6. POST /api/documents/:docId/demo-restore
+// 6. POST /api/documents/:docId/demo-restore  [demo]
 // ═════════════════════════════════════════════════════════════
 router.post('/:docId/demo-restore', async (req, res) => {
   try {
@@ -532,7 +565,66 @@ router.post('/:docId/demo-restore', async (req, res) => {
 });
 
 // ═════════════════════════════════════════════════════════════
-// 7. POST /api/documents/:docId/version
+// 7a. POST /api/documents/:docId/request-correction  [investigator only]
+// ═════════════════════════════════════════════════════════════
+router.post('/:docId/request-correction', requireRole('investigator'), async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const doc = await db.query('SELECT "correctionStatus" FROM documents WHERE "docId" = $1', [docId]);
+    if (!doc.rows.length) return res.status(404).json({ error: 'Document not found' });
+
+    if (doc.rows[0].correctionStatus === 'approved') {
+      return res.status(409).json({ error: 'A correction is already approved — upload the corrected file.' });
+    }
+
+    await db.query('UPDATE documents SET "correctionStatus" = $1 WHERE "docId" = $2', ['requested', docId]);
+    return res.json({ docId, correctionStatus: 'requested' });
+  } catch (err) {
+    console.error('[REQUEST-CORRECTION] Error:', err);
+    return res.status(500).json({ error: 'Failed to request correction' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// 7b. POST /api/documents/:docId/approve-correction  [admin only]
+// ═════════════════════════════════════════════════════════════
+router.post('/:docId/approve-correction', requireRole('admin'), async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const doc = await db.query('SELECT "correctionStatus" FROM documents WHERE "docId" = $1', [docId]);
+    if (!doc.rows.length) return res.status(404).json({ error: 'Document not found' });
+
+    if (doc.rows[0].correctionStatus !== 'requested') {
+      return res.status(409).json({ error: 'No pending correction request for this document.' });
+    }
+
+    await db.query('UPDATE documents SET "correctionStatus" = $1 WHERE "docId" = $2', ['approved', docId]);
+    return res.json({ docId, correctionStatus: 'approved' });
+  } catch (err) {
+    console.error('[APPROVE-CORRECTION] Error:', err);
+    return res.status(500).json({ error: 'Failed to approve correction' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// 7c. POST /api/documents/:docId/deny-correction  [admin only]
+// ═════════════════════════════════════════════════════════════
+router.post('/:docId/deny-correction', requireRole('admin'), async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const doc = await db.query('SELECT "correctionStatus" FROM documents WHERE "docId" = $1', [docId]);
+    if (!doc.rows.length) return res.status(404).json({ error: 'Document not found' });
+
+    await db.query('UPDATE documents SET "correctionStatus" = $1 WHERE "docId" = $2', ['none', docId]);
+    return res.json({ docId, correctionStatus: 'none' });
+  } catch (err) {
+    console.error('[DENY-CORRECTION] Error:', err);
+    return res.status(500).json({ error: 'Failed to deny correction' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════
+// 8. POST /api/documents/:docId/version  [investigator — approved only]
 // ═════════════════════════════════════════════════════════════
 router.post('/:docId/version', upload.single('file'), async (req, res) => {
   try {
@@ -552,13 +644,21 @@ router.post('/:docId/version', upload.single('file'), async (req, res) => {
     }
 
     const docResult = await db.query(
-      'SELECT "currentVersion" FROM documents WHERE "docId" = $1',
+      'SELECT "currentVersion", "correctionStatus" FROM documents WHERE "docId" = $1',
       [docId],
     );
 
     if (docResult.rows.length === 0) {
       removeFileQuietly(filePath);
       return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (docResult.rows[0].correctionStatus !== 'approved') {
+      removeFileQuietly(filePath);
+      return res.status(403).json({
+        error: 'Admin approval required',
+        message: 'An admin must approve the correction request before you can upload a new version.',
+      });
     }
 
     const newVersion = Number(docResult.rows[0].currentVersion) + 1;
@@ -580,7 +680,7 @@ router.post('/:docId/version', upload.single('file'), async (req, res) => {
     );
 
     await db.query(
-      `UPDATE documents SET "currentVersion" = $1, "docHash" = $2, filepath = $3 WHERE "docId" = $4`,
+      `UPDATE documents SET "currentVersion" = $1, "docHash" = $2, filepath = $3, "correctionStatus" = 'none' WHERE "docId" = $4`,
       [newVersion, newHash, filePath, docId],
     );
 

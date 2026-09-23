@@ -9,6 +9,7 @@ const db = require('./db');
 const { seedUsers } = require('./db/seed');
 const authRoutes = require('./routes/auth');
 const documentRoutes = require('./routes/documents');
+const userRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Routes ─────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

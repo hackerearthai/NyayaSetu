@@ -68,3 +68,21 @@ export const simulateTampering = id =>
 
 export const restoreOriginal = id =>
   request(`/documents/${encodeURIComponent(id)}/demo-restore`, { method: "POST" });
+
+export const getUsers = () => request("/users");
+
+export const requestCorrection = id =>
+  request(`/documents/${encodeURIComponent(id)}/request-correction`, { method: "POST" });
+
+export const approveCorrection = id =>
+  request(`/documents/${encodeURIComponent(id)}/approve-correction`, { method: "POST" });
+
+export const denyCorrection = id =>
+  request(`/documents/${encodeURIComponent(id)}/deny-correction`, { method: "POST" });
+
+export const uploadCorrectedVersion = (id, file, reason) => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("reason", reason);
+  return request(`/documents/${encodeURIComponent(id)}/version`, { method: "POST", body: form });
+};

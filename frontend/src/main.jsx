@@ -17,6 +17,11 @@ import {
   uploadDocument,
   simulateTampering,
   restoreOriginal,
+  getUsers,
+  requestCorrection,
+  approveCorrection,
+  denyCorrection,
+  uploadCorrectedVersion,
 } from "./api";
 
 import {
@@ -354,7 +359,7 @@ function Metric({ label, value, icon: Icon, logo, tone = "", onClick }) {
 /* PREVIEW COMPONENT WITH EXPAND FEATURE                                      */
 /* -------------------------------------------------------------------------- */
 
-function FilePreviewFrame({ title, docId, fileType, isTampered, reloadKey, onExpand }) {
+function FilePreviewFrame({ title, docId, fileType, version, isTampered, reloadKey, onExpand }) {
   const [blobUrl, setBlobUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -373,7 +378,9 @@ function FilePreviewFrame({ title, docId, fileType, isTampered, reloadKey, onExp
           ? "http://localhost:5000"
           : "";
 
-        const endpoint = `${API_BASE}/api/documents/${docId}/file/${fileType}?t=${Date.now()}`;
+        const endpoint = version
+          ? `${API_BASE}/api/documents/${docId}/version/${version}/file?t=${Date.now()}`
+          : `${API_BASE}/api/documents/${docId}/file/${fileType}?t=${Date.now()}`;
 
         const response = await fetch(endpoint, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -548,7 +555,19 @@ function DocumentTable({ docs, onSelect, onVerify, busy }) {
                   </span>
 
                   <span className="file-cell-text">
-                    <b title={doc.filename}>{doc.filename}</b>
+                    <b title={doc.filename} style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      {doc.filename}
+                      {doc.correctionStatus === 'requested' && (
+                        <span style={{ fontSize: '10px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '4px', padding: '1px 6px', fontWeight: 600, letterSpacing: '0.03em' }}>
+                          CORRECTION PENDING
+                        </span>
+                      )}
+                      {doc.correctionStatus === 'approved' && (
+                        <span style={{ fontSize: '10px', background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)', borderRadius: '4px', padding: '1px 6px', fontWeight: 600, letterSpacing: '0.03em' }}>
+                          CORRECTION APPROVED
+                        </span>
+                      )}
+                    </b>
 
                     <small title={doc.docId}>
                       {shortId(doc.docId, 20)}
@@ -1114,6 +1133,8 @@ function DetailPage({
   onVerify,
   busy,
   notify,
+  userRole,
+  onUpdate,
 }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1124,6 +1145,11 @@ function DetailPage({
   const [reloadKey, setReloadKey] = useState(Date.now());
   const [currentCalculatedHash, setCurrentCalculatedHash] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
+  const [correctionStatus, setCorrectionStatus] = useState(doc.correctionStatus || "none");
+  const [correctionBusy, setCorrectionBusy] = useState("");
+  const [correctionFile, setCorrectionFile] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionError, setCorrectionError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -1216,6 +1242,68 @@ function DetailPage({
     }
   }
 
+  async function handleRequestCorrection() {
+    setCorrectionError("");
+    setCorrectionBusy("requesting");
+    try {
+      const result = await requestCorrection(doc.docId);
+      setCorrectionStatus(result.correctionStatus);
+      notify("Correction request sent to admin.");
+    } catch (err) {
+      setCorrectionError(err.message || "Failed to request correction.");
+    } finally {
+      setCorrectionBusy("");
+    }
+  }
+
+  async function handleApproveCorrection() {
+    setCorrectionError("");
+    setCorrectionBusy("approving");
+    try {
+      const result = await approveCorrection(doc.docId);
+      setCorrectionStatus(result.correctionStatus);
+      notify("Correction approved. Investigator can now upload the corrected file.");
+    } catch (err) {
+      setCorrectionError(err.message || "Failed to approve correction.");
+    } finally {
+      setCorrectionBusy("");
+    }
+  }
+
+  async function handleDenyCorrection() {
+    setCorrectionError("");
+    setCorrectionBusy("denying");
+    try {
+      const result = await denyCorrection(doc.docId);
+      setCorrectionStatus(result.correctionStatus);
+      notify("Correction request denied.");
+    } catch (err) {
+      setCorrectionError(err.message || "Failed to deny correction.");
+    } finally {
+      setCorrectionBusy("");
+    }
+  }
+
+  async function handleUploadCorrection() {
+    setCorrectionError("");
+    if (!correctionFile) { setCorrectionError("Please select a file."); return; }
+    if (!correctionReason.trim()) { setCorrectionError("Please provide a reason."); return; }
+    setCorrectionBusy("uploading");
+    try {
+      await uploadCorrectedVersion(doc.docId, correctionFile, correctionReason);
+      setCorrectionStatus("none");
+      setCorrectionFile(null);
+      setCorrectionReason("");
+      notify("Correction uploaded and registered on blockchain.");
+      if (onUpdate) onUpdate();
+      await load();
+    } catch (err) {
+      setCorrectionError(err.message || "Failed to upload correction.");
+    } finally {
+      setCorrectionBusy("");
+    }
+  }
+
   const isTampered = doc.status === "tampered" || demoState === "tampered" || verifyResult?.status === "tampered";
   const onChainHash = detail?.docHash || doc.docHash || "—";
   const currentHashDisplay = currentCalculatedHash || verifyResult?.currentHash || (isTampered ? "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" : onChainHash);
@@ -1290,73 +1378,76 @@ function DetailPage({
       ) : (
         detail && (
           <>
-            <section className="panel tamper-demo-panel">
-              <PanelHead
-                title="Tamper Detection Demo"
-                subtitle="Test whether the registered evidence has been modified since blockchain registration."
-              />
+              {/* TAMPER DETECTION DEMO */}
+              {true && (
+                <section className="panel tamper-demo-panel">
+                  <PanelHead
+                    title="Tamper Detection Demo"
+                    subtitle="Test whether the registered evidence has been modified since blockchain registration."
+                  />
 
-              <div className="tamper-demo-actions" style={{ marginBottom: "16px" }}>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={runDemoTamper}
-                  disabled={Boolean(demoBusy)}
-                >
-                  <AlertTriangle size={14} />
-                  {demoBusy === "tamper" ? "Simulating..." : "Simulate Tampering"}
-                </button>
+                  <div className="tamper-demo-actions" style={{ marginBottom: "16px" }}>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={runDemoTamper}
+                      disabled={Boolean(demoBusy)}
+                    >
+                      <AlertTriangle size={14} />
+                      {demoBusy === "tamper" ? "Simulating..." : "Simulate Tampering"}
+                    </button>
 
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={runDemoRestore}
-                  disabled={Boolean(demoBusy) || (demoState !== "tampered" && doc.status !== "tampered")}
-                >
-                  <ShieldCheck size={14} />
-                  {demoBusy === "restore" ? "Restoring..." : "Restore Original"}
-                </button>
-              </div>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={runDemoRestore}
+                      disabled={Boolean(demoBusy) || (demoState !== "tampered" && doc.status !== "tampered")}
+                    >
+                      <ShieldCheck size={14} />
+                      {demoBusy === "restore" ? "Restoring..." : "Restore Original"}
+                    </button>
+                  </div>
 
-              <div
-                className="previews-container"
-                style={{
-                  display: "flex",
-                  gap: "16px",
-                  flexWrap: "wrap",
-                  marginTop: "16px",
-                  marginBottom: "16px",
-                }}
-              >
-                {/* ORIGINAL FILE PREVIEW */}
-                <FilePreviewFrame
-                  title="Original registered file preview"
-                  docId={doc.docId}
-                  fileType="original"
-                  isTampered={false}
-                  reloadKey={reloadKey}
-                  onExpand={(img) => setSelectedImage(img)}
-                />
+                  <div
+                    className="previews-container"
+                    style={{
+                      display: "flex",
+                      gap: "16px",
+                      flexWrap: "wrap",
+                      marginTop: "16px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    {/* ORIGINAL FILE PREVIEW */}
+                    <FilePreviewFrame
+                      title="Original registered file preview"
+                      docId={doc.docId}
+                      fileType="original"
+                      isTampered={false}
+                      reloadKey={reloadKey}
+                      onExpand={(img) => setSelectedImage(img)}
+                    />
 
-                {/* CURRENT / TAMPERED FILE PREVIEW */}
-                <FilePreviewFrame
-                  title="Current file preview"
-                  docId={doc.docId}
-                  fileType="current"
-                  isTampered={isTampered}
-                  reloadKey={reloadKey}
-                  onExpand={(img) => setSelectedImage(img)}
-                />
-              </div>
+                    {/* CURRENT / TAMPERED FILE PREVIEW */}
+                    <FilePreviewFrame
+                      title="Current file preview"
+                      docId={doc.docId}
+                      fileType="current"
+                      isTampered={isTampered}
+                      reloadKey={reloadKey}
+                      onExpand={(img) => setSelectedImage(img)}
+                    />
+                  </div>
 
-              {demoState && (
-                <small className="tamper-demo-note" style={{ display: "block", marginTop: "8px" }}>
-                  {demoState === "tampered"
-                    ? "Demo modification applied. Hash recalculation updated automatically below."
-                    : "Original registered file restored. Hash verification confirmed."}
-                </small>
+                  {demoState && (
+                    <small className="tamper-demo-note" style={{ display: "block", marginTop: "8px" }}>
+                      {demoState === "tampered"
+                        ? "Demo modification applied. Hash recalculation updated automatically below."
+                        : "Original registered file restored. Hash verification confirmed."}
+                    </small>
+                  )}
+                </section>
               )}
-            </section>
 
             <section className="panel">
               <PanelHead
@@ -1442,27 +1533,247 @@ function DetailPage({
               </section>
             </div>
 
+            <section className="panel" style={{
+              border: correctionStatus === 'requested' ? '1.5px solid var(--amber, #f59e0b)' : correctionStatus === 'approved' ? '1.5px solid var(--green, #22c55e)' : '1.5px solid var(--border)',
+            }}>
+              <PanelHead
+                title="Document Correction"
+                subtitle={
+                  correctionStatus === 'none' ? 'Request a correction to this document (requires admin approval).'
+                  : correctionStatus === 'requested' ? 'Correction request is pending admin approval.'
+                  : 'Admin has approved the correction — upload the corrected file.'
+                }
+              >
+                {correctionStatus === 'none' && (
+                  <span className="status-badge" style={{ background: 'var(--surface2)', color: 'var(--muted)', fontSize: '11px' }}>No request</span>
+                )}
+                {correctionStatus === 'requested' && (
+                  <span className="status-badge amber" style={{ fontSize: '11px' }}>⏳ Pending Approval</span>
+                )}
+                {correctionStatus === 'approved' && (
+                  <span className="status-badge green" style={{ fontSize: '11px' }}>✓ Approved</span>
+                )}
+              </PanelHead>
+
+              {correctionError && (
+                <p style={{ color: 'var(--red, #f87171)', fontSize: '13px', marginTop: '10px' }}>{correctionError}</p>
+              )}
+
+              {/* INVESTIGATOR VIEW */}
+              {userRole === 'investigator' && (
+                <div style={{ marginTop: '16px' }}>
+                  {correctionStatus === 'none' && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={handleRequestCorrection}
+                      disabled={correctionBusy === 'requesting'}
+                    >
+                      <RefreshCw size={14} />
+                      {correctionBusy === 'requesting' ? 'Requesting...' : 'Request Correction from Admin'}
+                    </button>
+                  )}
+
+                  {correctionStatus === 'requested' && (
+                    <p style={{ fontSize: '13px', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Clock3 size={15} />
+                      Waiting for admin to approve your correction request.
+                    </p>
+                  )}
+
+                  {correctionStatus === 'approved' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--green, #22c55e)', margin: 0, fontWeight: 600 }}>
+                        Admin has approved the correction. Upload the corrected file below.
+                      </p>
+                      <label style={{ fontSize: '13px', fontWeight: 500 }}>
+                        Corrected file
+                        <input
+                          type="file"
+                          style={{ display: 'block', marginTop: '6px', fontSize: '13px' }}
+                          onChange={e => setCorrectionFile(e.target.files[0] || null)}
+                        />
+                      </label>
+                      <label style={{ fontSize: '13px', fontWeight: 500 }}>
+                        Reason for correction
+                        <input
+                          type="text"
+                          value={correctionReason}
+                          onChange={e => setCorrectionReason(e.target.value)}
+                          placeholder="e.g. Typo in FIR number corrected"
+                          style={{ display: 'block', marginTop: '6px', width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontSize: '13px' }}
+                        />
+                      </label>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={handleUploadCorrection}
+                        disabled={correctionBusy === 'uploading'}
+                        style={{ alignSelf: 'flex-start' }}
+                      >
+                        <UploadCloud size={14} />
+                        {correctionBusy === 'uploading' ? 'Uploading...' : 'Upload Corrected Version'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ADMIN VIEW */}
+              {userRole === 'admin' && correctionStatus === 'requested' && (
+                <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <p style={{ width: '100%', fontSize: '13px', margin: '0 0 8px 0', color: 'var(--amber, #f59e0b)', fontWeight: 500 }}>
+                    An investigator has requested permission to correct this document.
+                  </p>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={handleApproveCorrection}
+                    disabled={Boolean(correctionBusy)}
+                  >
+                    <BadgeCheck size={14} />
+                    {correctionBusy === 'approving' ? 'Approving...' : 'Approve Correction'}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={handleDenyCorrection}
+                    disabled={Boolean(correctionBusy)}
+                    style={{ borderColor: 'var(--red, #f87171)', color: 'var(--red, #f87171)' }}
+                  >
+                    <X size={14} />
+                    {correctionBusy === 'denying' ? 'Denying...' : 'Deny'}
+                  </button>
+                </div>
+              )}
+
+              {userRole === 'admin' && correctionStatus === 'approved' && (
+                <p style={{ fontSize: '13px', color: 'var(--green, #22c55e)', marginTop: '12px' }}>
+                  ✓ Correction approved and waiting for investigator to upload.
+                </p>
+              )}
+            </section>
+
             <section className="panel">
               <PanelHead
                 title="Version history"
                 subtitle={`${detail.versions?.length || 0} registered version(s)`}
               />
 
-              {(detail.versions || []).map((version) => (
-                <div className="version-row" key={version.version}>
-                  <b>v{version.version}</b>
 
-                  <span>
-                    {version.reason || "Version registered"}
+              {(detail.versions || []).map((version, idx) => {
+                const isFirst = version.version === 1 || !version.previousHash;
+                return (
+                  <div className="version-row" key={version.version} style={{ flexDirection: "column", alignItems: "flex-start", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "100%" }}>
+                      <b style={{ flexShrink: 0 }}>v{version.version}</b>
+                      <span style={{ flex: 1 }}>
+                        {version.reason || "Version registered"}
+                        <small style={{ display: "block", color: "var(--muted)", marginTop: "2px" }}>
+                          {version.updatedBy && `By ${version.updatedBy} · `}{fmt(version.timestamp)}
+                        </small>
+                      </span>
+                      {isFirst ? (
+                        <span className="status-badge green" style={{ fontSize: "11px", flexShrink: 0 }}>
+                          Initial upload
+                        </span>
+                      ) : (
+                        <span className="status-badge amber" style={{ fontSize: "11px", flexShrink: 0 }}>
+                          Correction
+                        </span>
+                      )}
+                    </div>
 
-                    <small>
-                      {fmt(version.timestamp)}
-                      <br />
-                      SHA-256: {shortId(version.docHash, 28)}
-                    </small>
-                  </span>
-                </div>
-              ))}
+                    {/* Hash comparison */}
+                    <div style={{
+                      width: "100%",
+                      display: "grid",
+                      gridTemplateColumns: isFirst ? "1fr" : "1fr auto 1fr",
+                      gap: "8px",
+                      alignItems: "center",
+                      background: "var(--bg, #0f1117)",
+                      borderRadius: "6px",
+                      padding: "10px 12px",
+                    }}>
+                      {isFirst ? (
+                        <div>
+                          <small style={{ color: "var(--muted)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "3px" }}>
+                            SHA-256 (registered)
+                          </small>
+                          <code style={{ fontSize: "11px", color: "var(--green, #22c55e)", wordBreak: "break-all" }}>
+                            {version.docHash}
+                          </code>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <small style={{ color: "var(--muted)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "3px" }}>
+                              SHA-256 (before)
+                            </small>
+                            <code style={{ fontSize: "11px", color: "var(--green, #22c55e)", wordBreak: "break-all" }}>
+                              {version.previousHash}
+                            </code>
+                          </div>
+
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                            <polyline points="12 5 19 12 12 19" />
+                          </svg>
+
+                          <div>
+                            <small style={{ color: "var(--muted)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "3px" }}>
+                              SHA-256 (after)
+                            </small>
+                            <code style={{ fontSize: "11px", color: "var(--green, #22c55e)", wordBreak: "break-all" }}>
+                              {version.docHash}
+                            </code>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Add Previews Below the Hash */}
+                    <div style={{
+                      display: "flex",
+                      gap: "16px",
+                      width: "100%",
+                      marginTop: "4px",
+                      flexWrap: "wrap",
+                    }}>
+                      {isFirst ? (
+                        <FilePreviewFrame
+                          title={`Version ${version.version} Preview`}
+                          docId={doc.docId}
+                          version={version.version}
+                          isTampered={false}
+                          reloadKey={reloadKey}
+                          onExpand={(img) => setSelectedImage(img)}
+                        />
+                      ) : (
+                        <>
+                          <FilePreviewFrame
+                            title={`Version ${version.version - 1} Preview`}
+                            docId={doc.docId}
+                            version={version.version - 1}
+                            isTampered={false}
+                            reloadKey={reloadKey}
+                            onExpand={(img) => setSelectedImage(img)}
+                          />
+                          <FilePreviewFrame
+                            title={`Version ${version.version} Preview`}
+                            docId={doc.docId}
+                            version={version.version}
+                            isTampered={false}
+                            reloadKey={reloadKey}
+                            onExpand={(img) => setSelectedImage(img)}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
             </section>
 
             <section className="panel">
@@ -1804,6 +2115,174 @@ function RecordsPage({ docs, onSelect, onVerify, busy, initialFilter = "all" }) 
 }
 
 /* -------------------------------------------------------------------------- */
+/* USER MANAGEMENT PAGE  (admin only)                                         */
+/* -------------------------------------------------------------------------- */
+
+function UserManagementPage() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const ROLE_LABELS = {
+    investigator: "Investigator",
+    court_clerk: "Court Clerk",
+    admin: "Administrator",
+  };
+
+  const ROLE_COLORS = {
+    investigator: "#3b82f6",
+    court_clerk: "#22c55e",
+    admin: "#f59e0b",
+  };
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await getUsers();
+      setUsers(result || []);
+    } catch (err) {
+      setError(err.message || "Unable to load users.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <div className="page-body records-page">
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">ADMINISTRATION</span>
+          <h1>User Management</h1>
+          <p>All registered accounts in the NyayaSetu system.</p>
+        </div>
+
+        <button className="secondary-button" type="button" onClick={load}>
+          <RefreshCw size={15} />
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="page-body">
+          <p role="status">Loading users...</p>
+        </div>
+      ) : error ? (
+        <ErrorText error={error} />
+      ) : (
+        <section className="panel">
+          <PanelHead
+            title="Registered accounts"
+            subtitle={`${users.length} user${users.length !== 1 ? "s" : ""} in system`}
+          />
+
+          <div className="table-wrap">
+            <table className="records-table">
+              <colgroup>
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "20%" }} />
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th>User ID</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.userId}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span
+                          className="avatar"
+                          style={{
+                            width: "28px",
+                            height: "28px",
+                            fontSize: "11px",
+                            borderRadius: "50%",
+                            background: ROLE_COLORS[u.role] + "22",
+                            color: ROLE_COLORS[u.role],
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {u.username?.slice(0, 2).toUpperCase()}
+                        </span>
+                        <b>{u.username}</b>
+                      </div>
+                    </td>
+
+                    <td>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "3px 10px",
+                          borderRadius: "20px",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          background: ROLE_COLORS[u.role] + "18",
+                          color: ROLE_COLORS[u.role],
+                          border: `1px solid ${ROLE_COLORS[u.role]}33`,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: "6px",
+                            height: "6px",
+                            borderRadius: "50%",
+                            background: ROLE_COLORS[u.role],
+                            flexShrink: 0,
+                          }}
+                        />
+                        {ROLE_LABELS[u.role] || u.role}
+                      </span>
+                    </td>
+
+                    <td>
+                      <code
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--muted)",
+                          wordBreak: "break-all",
+                        }}
+                        title={u.userId}
+                      >
+                        {shortId(u.userId, 20)}
+                      </code>
+                    </td>
+
+                    <td>
+                      <span className="muted" style={{ fontSize: "12px" }}>
+                        {fmt(u.createdAt)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* SIDEBAR                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -1822,6 +2301,20 @@ function Sidebar({
   const review = docs.filter(
     (doc) => doc.aiRiskFlag === "review_recommended"
   ).length;
+
+  const isAdmin = profile.role === 'admin';
+
+  const ROLE_LABELS = {
+    investigator: 'Investigator',
+    court_clerk: 'Court Clerk',
+    admin: 'Administrator',
+  };
+
+  const ROLE_COLORS = {
+    investigator: 'var(--blue, #3b82f6)',
+    court_clerk: 'var(--green, #22c55e)',
+    admin: 'var(--amber, #f59e0b)',
+  };
 
   return (
     <div className={`sidebar-wrap ${mobile ? "open" : ""}`}>
@@ -1867,6 +2360,20 @@ function Sidebar({
               )}
             </button>
           ))}
+
+          {isAdmin && (
+            <>
+              <small className="nav-label" style={{ marginTop: '12px' }}>ADMIN</small>
+              <button
+                type="button"
+                className={`nav-item ${active === 'users' ? 'active' : ''}`}
+                onClick={() => navigate('users')}
+              >
+                <Users size={16} />
+                User Management
+              </button>
+            </>
+          )}
         </nav>
 
         <div className="sidebar-bottom">
@@ -1910,7 +2417,19 @@ function Sidebar({
 
             <span>
               <b>{profile.username || "User"}</b>
-              <small>{profile.role || "investigator"}</small>
+              <small style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: ROLE_COLORS[profile.role] || 'var(--muted)',
+                    flexShrink: 0,
+                  }}
+                />
+                {ROLE_LABELS[profile.role] || profile.role || 'investigator'}
+              </small>
             </span>
 
             <MoreHorizontal size={17} />
@@ -2260,6 +2779,7 @@ function App({ onLogout }) {
     detail: "Document detail",
     settings: "Settings",
     profile: "Profile",
+    users: "User Management",
   };
 
   return (
@@ -2358,10 +2878,16 @@ function App({ onLogout }) {
                   onVerify={verify}
                   busy={busy}
                   notify={notify}
+                  userRole={user?.role}
+                  onUpdate={reload}
                 />
               )}
 
               {page === "chain" && <ChainPage docs={docs} />}
+
+              {page === "users" && user?.role === 'admin' && (
+                <UserManagementPage />
+              )}
 
               {page === "activity" && (
                 <div className="page-body records-page">

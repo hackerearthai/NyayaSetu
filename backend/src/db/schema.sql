@@ -5,6 +5,7 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";   -- for gen_random_uuid() fallback
 
+
 -- Users table (demo / hardcoded users seeded by seed.js)
 CREATE TABLE IF NOT EXISTS users (
   "userId"       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -22,8 +23,10 @@ CREATE TABLE IF NOT EXISTS documents (
   "docHash"        VARCHAR(64)  NOT NULL,
   "uploaderId"     UUID         NOT NULL REFERENCES users("userId"),
   timestamp        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  "aiRiskFlag"     VARCHAR(30)  DEFAULT 'pending',
-  "currentVersion" INT          DEFAULT 1
+  "aiRiskFlag"       VARCHAR(30)  DEFAULT 'pending',
+  "currentVersion"   INT          DEFAULT 1,
+  "correctionStatus" VARCHAR(20)  DEFAULT 'none'
+                     CHECK ("correctionStatus" IN ('none', 'requested', 'approved'))
 );
 
 -- Document versions (append-only history)
@@ -37,3 +40,18 @@ CREATE TABLE IF NOT EXISTS document_versions (
   "updatedBy"   UUID,
   timestamp     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+-- Migration: add correctionStatus to existing tables (safe to run multiple times)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'documents' AND column_name = 'correctionStatus'
+  ) THEN
+    ALTER TABLE documents
+      ADD COLUMN "correctionStatus" VARCHAR(20) DEFAULT 'none'
+        CHECK ("correctionStatus" IN ('none', 'requested', 'approved'));
+  END IF;
+END;
+$$;
+

@@ -1,9 +1,9 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\ASUS\\sih\\blockchain\\contracts\\DocumentRegistry.sol": {
-      "lastModificationDate": 1788455835789,
-      "contentHash": "b8ea1358f772b392a54b19ba6321b3af",
+    "C:\\Code\\NyayaSetu\\blockchain\\contracts\\DocumentRegistry.sol": {
+      "lastModificationDate": 1789998341469,
+      "contentHash": "134fac5b5521b5fd0f8579e70794a1c9",
       "sourceName": "contracts/DocumentRegistry.sol",
       "solcConfig": {
         "version": "0.8.24",
@@ -39,8 +39,8 @@
         "DocumentRegistry"
       ]
     },
-    "C:\\Users\\ASUS\\sih\\blockchain\\node_modules\\@openzeppelin\\contracts\\access\\AccessControl.sol": {
-      "lastModificationDate": 1788530419059,
+    "C:\\Code\\NyayaSetu\\blockchain\\node_modules\\@openzeppelin\\contracts\\access\\AccessControl.sol": {
+      "lastModificationDate": 1790170860407,
       "contentHash": "798a29e3c30dbd3eda1a67add26571e2",
       "sourceName": "@openzeppelin/contracts/access/AccessControl.sol",
       "solcConfig": {
@@ -79,10 +79,10 @@
         "AccessControl"
       ]
     },
-    "C:\\Users\\ASUS\\sih\\blockchain\\node_modules\\@openzeppelin\\contracts\\access\\IAccessControl.sol": {
-      "lastModificationDate": 1788530425110,
-      "contentHash": "def1e8f7b6cac577cf2600655bf3bdf8",
-      "sourceName": "@openzeppelin/contracts/access/IAccessControl.sol",
+    "C:\\Code\\NyayaSetu\\blockchain\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
+      "lastModificationDate": 1790170861283,
+      "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
+      "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
@@ -109,14 +109,14 @@
       },
       "imports": [],
       "versionPragmas": [
-        ">=0.8.4"
+        "^0.8.20"
       ],
       "artifacts": [
-        "IAccessControl"
+        "Context"
       ]
     },
-    "C:\\Users\\ASUS\\sih\\blockchain\\node_modules\\@openzeppelin\\contracts\\utils\\introspection\\ERC165.sol": {
-      "lastModificationDate": 1788530423089,
+    "C:\\Code\\NyayaSetu\\blockchain\\node_modules\\@openzeppelin\\contracts\\utils\\introspection\\ERC165.sol": {
+      "lastModificationDate": 1790170862568,
       "contentHash": "0906d06dca25210d4696dcef6dad2909",
       "sourceName": "@openzeppelin/contracts/utils/introspection/ERC165.sol",
       "solcConfig": {
@@ -153,10 +153,10 @@
         "ERC165"
       ]
     },
-    "C:\\Users\\ASUS\\sih\\blockchain\\node_modules\\@openzeppelin\\contracts\\utils\\Context.sol": {
-      "lastModificationDate": 1788530420006,
-      "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
-      "sourceName": "@openzeppelin/contracts/utils/Context.sol",
+    "C:\\Code\\NyayaSetu\\blockchain\\node_modules\\@openzeppelin\\contracts\\access\\IAccessControl.sol": {
+      "lastModificationDate": 1790170863794,
+      "contentHash": "def1e8f7b6cac577cf2600655bf3bdf8",
+      "sourceName": "@openzeppelin/contracts/access/IAccessControl.sol",
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
@@ -183,14 +183,14 @@
       },
       "imports": [],
       "versionPragmas": [
-        "^0.8.20"
+        ">=0.8.4"
       ],
       "artifacts": [
-        "Context"
+        "IAccessControl"
       ]
     },
-    "C:\\Users\\ASUS\\sih\\blockchain\\node_modules\\@openzeppelin\\contracts\\utils\\introspection\\IERC165.sol": {
-      "lastModificationDate": 1788530425666,
+    "C:\\Code\\NyayaSetu\\blockchain\\node_modules\\@openzeppelin\\contracts\\utils\\introspection\\IERC165.sol": {
+      "lastModificationDate": 1790170864375,
       "contentHash": "7074c93b1ea0a122063f26ddd1db1032",
       "sourceName": "@openzeppelin/contracts/utils/introspection/IERC165.sol",
       "solcConfig": {
