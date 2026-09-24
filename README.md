@@ -63,6 +63,18 @@ NyayaSetu (Sentinel Records) is a secure digital evidence integrity and audit sy
 
 <div align="center">
 
+### `Re-add The Doc After Admin Approaval`
+
+<img width="1902" height="939" alt="image" src="https://github.com/user-attachments/assets/545acb3f-bf26-4da5-b28f-c2f4cb9a1b7d" />
+
+### `Original FIR Copy`
+
+<img width="898" height="785" alt="image" src="https://github.com/user-attachments/assets/85a889db-274c-4a6e-8759-8cc23bfe2009" />
+
+### `Changed FIR Copy`
+
+<img width="892" height="794" alt="image" src="https://github.com/user-attachments/assets/866ef058-74ec-4b25-aace-3a9c8b7df414" />
+
 ### `Audit Activity`
 
 <img width="1907" height="948" alt="image" src="https://github.com/user-attachments/assets/dbaa172b-80a0-4511-af0c-5883c0f4f08f" />
@@ -75,6 +87,10 @@ NyayaSetu (Sentinel Records) is a secure digital evidence integrity and audit sy
 
 <img width="1905" height="950" alt="image" src="https://github.com/user-attachments/assets/0150917f-5690-463f-bd62-c6b9470796e6" />
 
+
+
+<div align="left">
+       
 ---
 ## 📑 Table of Contents
 
