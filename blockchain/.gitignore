@@ -3,3 +3,6 @@ artifacts/
 cache/
 .ganache/
 .env
+.ganache
+.ganache_backup
+.ganache_test
