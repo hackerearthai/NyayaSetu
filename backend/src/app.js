@@ -19,7 +19,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://nyayasetu-pi.vercel.app'
+    'https://nyayasetu-fawn.vercel.app'
   ],
   credentials: true
 }));
