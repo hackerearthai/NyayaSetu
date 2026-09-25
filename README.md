@@ -1,8 +1,26 @@
+<div align="center">
+
+<img src="./frontend/src/nyayasetu-mark.png" alt="NyayaSetu Logo" width="180"/>
+
 # ⚖️ NyayaSetu
+
+### **Blockchain-Backed Digital Evidence Integrity & AI-Assisted Tamper-Risk Detection System**
+
+[![React](https://img.shields.io/badge/REACT-18.x-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Vite](https://img.shields.io/badge/VITE-FRONTEND-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev)
+[![Node.js](https://img.shields.io/badge/NODE.JS-BACKEND-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Express.js](https://img.shields.io/badge/EXPRESS.JS-API_LAYER-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com)
+[![Solidity](https://img.shields.io/badge/SOLIDITY-SMART_CONTRACTS-363636?style=for-the-badge&logo=solidity&logoColor=white)](https://soliditylang.org)
+[![Hardhat](https://img.shields.io/badge/HARDHAT-BLOCKCHAIN_DEV-FCC72B?style=for-the-badge&logo=hardhat&logoColor=black)](https://hardhat.org)
+[![PostgreSQL](https://img.shields.io/badge/POSTGRESQL-DATABASE-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![SHA-256](https://img.shields.io/badge/SHA--256-FILE_INTEGRITY-2E8B57?style=for-the-badge)](https://en.wikipedia.org/wiki/SHA-2)
+[![Python](https://img.shields.io/badge/PYTHON-AI_MICROSERVICE-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org)
+
+</div>
 
 **🔐 A cryptographic integrity and audit layer for digital evidence.**
 
-NyayaSetu (Sentinel Records) is a secure digital evidence integrity and audit system designed as an **add-on layer** for existing government systems such as **CCTNS / ICJS**. It does not replace existing evidence-management infrastructure. Instead, it adds:
+NyayaSetu is a secure digital evidence integrity and audit system designed as an **add-on layer** for existing government systems such as **CCTNS / ICJS**. It does not replace existing evidence-management infrastructure. Instead, it adds:
 
 - 🔑 Cryptographic integrity verification (SHA-256)
 - 🤖 AI-assisted pre-upload tamper-risk screening
